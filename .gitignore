@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data and outputs
+data/processed/*.csv
+data/processed/*.rds
+data/processed/*.parquet
+experiments/results/
+experiments/tmp/
+reports/figures/*.png
+reports/figures/*.jpg
+reports/figures/*.pdf
+reports/paper/*_files/
+reports/presentation/*_files/
+
+# Large/local artifacts
+*.html
+*.log
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

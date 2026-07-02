@@ -1,0 +1,13 @@
+name: statistical-machine-learning
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scikit-learn
+  - statsmodels
+  - matplotlib
+  - seaborn
+  - jupyter
+  - pytest
