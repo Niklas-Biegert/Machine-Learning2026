@@ -1,0 +1,13 @@
+"dgp","cv_method","selected_model","count"
+"AR(1)","kfold","LM-lag1",443
+"ARMA(1,1)","kfold","LM-lag1",1
+"MA(1)","kfold","LM-lag1",40
+"AR(1)","rolling_origin","LM-lag1",299
+"ARMA(1,1)","rolling_origin","LM-lag1",185
+"MA(1)","rolling_origin","LM-lag1",214
+"AR(1)","kfold","LM-lag5",57
+"ARMA(1,1)","kfold","LM-lag5",499
+"MA(1)","kfold","LM-lag5",460
+"AR(1)","rolling_origin","LM-lag5",201
+"ARMA(1,1)","rolling_origin","LM-lag5",315
+"MA(1)","rolling_origin","LM-lag5",286

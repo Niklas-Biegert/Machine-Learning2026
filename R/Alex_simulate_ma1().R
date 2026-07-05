@@ -186,3 +186,166 @@ test_data$predicted_y <- predict(
 )
 
 head(test_data, 10)
+
+
+
+
+
+
+#so?#####################################
+
+
+###############################################################################
+# Simulationsteil: MA(1)-Daten-generierender Prozess
+# Ziel: Eine einfache MA(1)-Zeitreihe simulieren
+###############################################################################
+
+# Seed setzen, damit die Simulation reproduzierbar ist
+set.seed(123)
+
+
+###############################################################################
+# Schritt 1: Funktion zur Simulation eines MA(1)-Prozesses
+###############################################################################
+
+# MA(1) bedeutet:
+# Der aktuelle Wert y_t hängt vom aktuellen Fehler epsilon_t
+# und vom vorherigen Fehler epsilon_{t-1} ab.
+#
+# Modell:
+# y_t = epsilon_t + theta * epsilon_{t-1}
+#
+# theta   = MA-Parameter, also Stärke des Einflusses von epsilon_{t-1}
+# sigma   = Standardabweichung des Fehlerterms
+# epsilon = zufälliger Fehler / Schock
+# T       = Länge der Zeitreihe
+
+simulate_ma1 <- function(T = 250, theta = 0.6, sigma = 1) {
+  
+  # Zufällige Fehler / Schocks erzeugen
+  epsilon <- rnorm(T, mean = 0, sd = sigma)
+  
+  # Leeren Vektor für die Zeitreihe erstellen
+  y <- numeric(T)
+  
+  # Startwert setzen:
+  # Für t = 1 gibt es noch keinen vorherigen Fehler epsilon_0.
+  # Deshalb setzen wir y[1] gleich dem ersten Fehler.
+  y[1] <- epsilon[1]
+  
+  # MA(1)-Prozess Schritt für Schritt simulieren
+  for (i in 2:T) {
+    y[i] <- epsilon[i] + theta * epsilon[i - 1]
+  }
+  
+  # Simulierte Zeitreihe zurückgeben
+  return(y)
+}
+
+
+###############################################################################
+# Schritt 2: Testlauf der MA(1)-Simulation
+###############################################################################
+
+# Parameter für den ersten Testlauf
+T <- 250
+theta <- 0.6
+sigma <- 1
+
+# MA(1)-Zeitreihe simulieren
+y_ma <- simulate_ma1(
+  T = T,
+  theta = theta,
+  sigma = sigma
+)
+
+
+###############################################################################
+# Schritt 3: Struktur prüfen
+###############################################################################
+
+# Prüfen, ob y_ma ein numerischer Vektor ist
+is.numeric(y_ma)
+
+# Prüfen, ob die Länge stimmt
+length(y_ma)
+
+# Erste Werte anzeigen
+head(y_ma)
+
+
+###############################################################################
+# Schritt 4: Dataframe erstellen
+###############################################################################
+
+ma_data <- data.frame(
+  time = 1:T,
+  y = y_ma,
+  dgp = "MA(1)",
+  theta = theta,
+  sigma = sigma
+)
+
+head(ma_data)
+
+
+###############################################################################
+# Schritt 5: MA(1)-Zeitreihe plotten
+###############################################################################
+
+plot(
+  ma_data$time,
+  ma_data$y,
+  type = "l",
+  main = "Simulierte MA(1)-Zeitreihe",
+  xlab = "Zeit",
+  ylab = "y"
+)
+
+
+###############################################################################
+# Schritt 6: Autokorrelation anschauen
+###############################################################################
+
+# ACF = Autokorrelationsfunktion
+# Sie zeigt, wie stark y_t mit vergangenen Werten zusammenhängt.
+#
+# Bei einem MA(1)-Prozess sollte vor allem Lag 1 auffällig sein.
+# Ab Lag 2 sollte die Autokorrelation ungefähr bei 0 liegen,
+# weil ein MA(1)-Prozess nur einen vorherigen Fehlerterm verwendet.
+
+acf(
+  ma_data$y,
+  lag.max = 30,
+  main = "ACF der simulierten MA(1)-Zeitreihe"
+)
+
+
+###############################################################################
+# Kurze Interpretation
+###############################################################################
+
+# Interpretation:
+#
+# Der MA(1)-Prozess beschreibt eine Zeitreihe, bei der der aktuelle Wert y_t
+# vom aktuellen Fehler epsilon_t und vom vorherigen Fehler epsilon_{t-1} abhängt.
+#
+# Der Parameter theta bestimmt die Stärke dieser Nachwirkung.
+#
+# Bei theta = 0.6 wirkt der vorherige Schock relativ deutlich auf den heutigen
+# Wert weiter.
+#
+# Im Gegensatz zu einem AR(1)-Prozess hängt y_t hier nicht direkt vom vorherigen
+# Wert y_{t-1} ab, sondern vom vorherigen Fehlerterm epsilon_{t-1}.
+#
+# Die simulierte Zeitreihe kann später als daten-generierender Prozess
+# in der Monte-Carlo-Studie verwendet werden.
+###############################################################################
+
+
+
+
+
+
+
+

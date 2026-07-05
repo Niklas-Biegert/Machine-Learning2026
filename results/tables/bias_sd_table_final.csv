@@ -1,0 +1,16 @@
+"DGP","CV_Method","SD_Bias"
+"AR(1)","Blocked",0.1023
+"AR(1)","h-block",0.1016
+"AR(1)","k-fold",0.1024
+"AR(1)","LOOCV",0.1021
+"AR(1)","Rolling-origin",0.2543
+"ARMA(1,1)","Blocked",0.106
+"ARMA(1,1)","h-block",0.1044
+"ARMA(1,1)","k-fold",0.1051
+"ARMA(1,1)","LOOCV",0.1039
+"ARMA(1,1)","Rolling-origin",0.264
+"MA(1)","Blocked",0.1067
+"MA(1)","h-block",0.1062
+"MA(1)","k-fold",0.1056
+"MA(1)","LOOCV",0.1048
+"MA(1)","Rolling-origin",0.2624

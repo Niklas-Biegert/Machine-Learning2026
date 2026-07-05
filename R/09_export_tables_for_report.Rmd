@@ -1,0 +1,57 @@
+---
+title: "09_export_tables_for_report"
+author: "Niklas Biegert"
+date: "2026-07-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Ergebnisse der Monte-Carlo-Simulation
+
+Zur Bewertung der Cross-Validation-Verfahren wurde eine Monte-Carlo-Simulation mit 500 Wiederholungen pro daten-generierendem Prozess durchgeführt. Betrachtet wurden drei verschiedene Zeitreihenprozesse: AR(1), MA(1) und ARMA(1,1). Für jede simulierte Zeitreihe wurden zwei Forecasting-Modelle mit Lag-Features verglichen: eine lineare Regression mit einem Lag (`LM-lag1`) und eine lineare Regression mit fünf Lags (`LM-lag5`). Die Modellwahl erfolgte jeweils durch fünf verschiedene Cross-Validation-Verfahren: k-fold CV, LOOCV, rolling-origin CV, blocked CV und h-block CV.
+
+Der Bias wurde definiert als Differenz zwischen dem geschätzten Cross-Validation-Fehler und dem tatsächlichen Holdout-Testfehler:
+
+\[
+Bias = RMSE_{CV} - RMSE_{Test}
+\]
+
+Ein negativer Bias bedeutet, dass die Cross-Validation-Methode den zukünftigen Vorhersagefehler unterschätzt und damit zu optimistisch ist. Ein positiver Bias bedeutet dagegen, dass die Methode den Fehler überschätzt und somit eher pessimistisch ist. Werte nahe null zeigen, dass die Methode den tatsächlichen Testfehler im Durchschnitt realistisch approximiert.
+
+### Durchschnittlicher Bias
+
+Die Ergebnisse zeigen, dass k-fold CV, LOOCV, blocked CV und h-block CV in diesem Simulationsdesign sehr nahe bei einem Bias von null liegen. Beim AR(1)-Prozess beträgt der durchschnittliche Bias für h-block CV beispielsweise nur -0.0001, für k-fold CV 0.0004, für LOOCV -0.0007 und für blocked CV 0.0010. Damit liefern diese Verfahren für AR(1) nahezu unverzerrte Schätzungen des späteren Testfehlers.
+
+Beim ARMA(1,1)-Prozess ist LOOCV mit einem durchschnittlichen Bias von 0.0029 am nächsten an null. h-block CV folgt mit 0.0040, blocked CV mit 0.0067 und k-fold CV mit 0.0073. Auch hier sind die Verzerrungen insgesamt gering, wobei rolling-origin CV mit einem Bias von -0.0681 deutlich stärker optimistisch verzerrt ist.
+
+Beim MA(1)-Prozess schneiden h-block CV und LOOCV am besten ab. Beide Verfahren weisen einen durchschnittlichen Bias von 0.0014 auf. Blocked CV liegt mit 0.0021 ebenfalls nahe an null, k-fold CV mit 0.0047 etwas darüber. Rolling-origin CV zeigt dagegen erneut eine deutlich negative Verzerrung von -0.0608.
+
+### Stabilität der Fehlerschätzung
+
+Neben dem durchschnittlichen Bias wurde auch die Standardabweichung des Bias betrachtet. Diese beschreibt, wie stark die Fehlerschätzung über die 500 Simulationen hinweg schwankt. Für k-fold CV, LOOCV, blocked CV und h-block CV liegt die Standardabweichung des Bias bei allen DGPs ungefähr zwischen 0.10 und 0.11. Rolling-origin CV weist dagegen deutlich höhere Werte auf: 0.2543 für AR(1), 0.2640 für ARMA(1,1) und 0.2624 für MA(1). Das deutet darauf hin, dass rolling-origin CV in diesem konkreten Setup nicht nur stärker optimistisch verzerrt ist, sondern auch instabilere Fehlerschätzungen liefert.
+
+### Beste Methode nach absolutem Bias
+
+Vergleicht man die Methoden anhand des absoluten Bias, ergibt sich folgendes Bild: Für AR(1) ist h-block CV mit einem absoluten Bias von 0.0001 am besten. Für ARMA(1,1) ist LOOCV mit einem absoluten Bias von 0.0029 am besten. Für MA(1) liegen h-block CV und LOOCV gleichauf mit einem absoluten Bias von jeweils 0.0014. Insgesamt zeigen h-block CV und LOOCV in dieser Simulation die realistischsten Fehlerschätzungen.
+
+## Diskussion
+
+Die Ergebnisse zeigen, dass die Wahl der Cross-Validation-Methode bei zeitabhängigen Daten einen messbaren Einfluss auf die Fehlerschätzung und die Modellwahl haben kann. Besonders auffällig ist, dass rolling-origin CV in dieser Simulation systematisch negativ verzerrt ist. Das bedeutet, dass rolling-origin CV den tatsächlichen Holdout-Testfehler unterschätzt. Gleichzeitig weist rolling-origin CV die höchste Streuung des Bias auf, was auf eine geringere Stabilität der Methode in diesem Setup hindeutet.
+
+Dieses Ergebnis sollte jedoch nicht als allgemeine Aussage verstanden werden, dass rolling-origin CV grundsätzlich ungeeignet ist. Vielmehr hängt das Ergebnis stark vom konkreten Simulationsdesign ab. In dieser Studie wurde rolling-origin CV mit einem Forecast-Horizont von 1 und einem Schrittwert von 10 umgesetzt. Dadurch entstehen vergleichsweise wenige Validierungspunkte. Wenn diese Punkte zufällig leichter vorherzusagen sind als der spätere Holdout-Testbereich, kann die Methode den Fehler zu optimistisch einschätzen. Eine alternative Parametrisierung, beispielsweise mit größerem Validierungsfenster oder dichterer Auswertung, könnte zu anderen Ergebnissen führen.
+
+Überraschend ist, dass klassische Verfahren wie k-fold CV und LOOCV in diesem vereinfachten Setting sehr geringe durchschnittliche Verzerrungen aufweisen. Theoretisch sind diese Verfahren bei Zeitreihendaten problematisch, weil sie die zeitliche Abhängigkeit nicht vollständig respektieren. Insbesondere k-fold CV mischt Beobachtungen zufällig und kann dadurch Informationen aus der Zukunft indirekt in das Training einfließen lassen. LOOCV entfernt jeweils nur einen einzelnen Datenpunkt, sodass Nachbarpunkte im Training verbleiben. Dennoch zeigen die Ergebnisse, dass diese theoretischen Probleme in dem hier gewählten linearen und relativ einfachen Simulationsdesign nicht zu einer starken Verzerrung führen.
+
+h-block CV liefert insgesamt besonders plausible Ergebnisse, da es explizit einen Pufferbereich um den Validierungspunkt entfernt. Dadurch wird verhindert, dass sehr nahe Nachbarbeobachtungen im Training liegen. Diese Methode berücksichtigt somit die lokale Abhängigkeit der Zeitreihe stärker als LOOCV und k-fold CV. Gleichzeitig bleibt sie in den Ergebnissen stabil und weist einen sehr geringen Bias auf.
+
+## Limitationen
+
+Die Analyse basiert auf einem bewusst vereinfachten Simulationsdesign. Erstens wurden nur drei DGPs betrachtet: AR(1), MA(1) und ARMA(1,1). Komplexere Zeitreihen mit Trend, Saisonalität, Strukturbrüchen oder heteroskedastischen Fehlern wurden bisher nicht berücksichtigt. Zweitens wurden nur zwei einfache lineare Forecasting-Modelle verglichen. Nichtlineare Modelle wie Random Forests oder regularisierte Modelle wie Ridge und Lasso könnten zu anderen Ergebnissen führen.
+
+Drittens hängt das Ergebnis von den gewählten Parametern ab, zum Beispiel von der Zeitreihenlänge, dem Train-Test-Split, der Anzahl der Lags und der konkreten Parametrisierung der CV-Verfahren. Insbesondere rolling-origin CV könnte bei anderen Einstellungen deutlich besser abschneiden. Viertens wurde der Holdout-Testfehler als Referenz verwendet. Dieser ist zwar sinnvoll, stellt aber selbst nur eine empirische Approximation des tatsächlichen zukünftigen Vorhersagefehlers dar.
+
+## Praktische Empfehlung
+
+Für einfache lineare Zeitreihenmodelle mit Lag-Features zeigen die Ergebnisse, dass h-block CV und LOOCV in diesem Setting besonders realistische Fehlerschätzungen liefern. h-block CV ist theoretisch besser an zeitabhängige Daten angepasst, weil es einen Abstand zwischen Trainings- und Validierungsdaten erzwingt. Daher erscheint h-block CV als besonders geeignete Methode, wenn lokale zeitliche Abhängigkeit berücksichtigt werden soll. Rolling-origin CV sollte sorgfältig parametrisiert werden, da es in dieser Simulation zu optimistischen und instabileren Fehlerschätzungen geführt hat.
