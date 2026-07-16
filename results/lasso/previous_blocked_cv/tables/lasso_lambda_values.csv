@@ -1,0 +1,2 @@
+"lambda_min","lambda_1se","n_selected_lags","train_n","test_n","nfolds","train_time_min","train_time_max","test_time_min","test_time_max"
+0.076968681115433,0.310723894034418,7,154,66,5,31,184,185,250

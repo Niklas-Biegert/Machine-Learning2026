@@ -1,0 +1,5 @@
+Reproducibility check
+model_metrics_without_runtime_identical=True
+test_predictions_identical=True
+lasso_lambda_values_identical=True
+Note: runtime_seconds is not expected to be byte-identical across runs.
