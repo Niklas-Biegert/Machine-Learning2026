@@ -1,0 +1,140 @@
+---
+title: "Cross-Validation für Zeitreihenprognosen"
+subtitle: "Standard-k-fold, blocked, h-block und rolling-origin im Simulationsvergleich"
+author: "Niklas Biegert"
+date: "12. August 2026"
+format:
+  revealjs:
+    theme: [simple, presentation.scss]
+    slide-number: true
+    controls: true
+    progress: true
+    transition: none
+    background-transition: none
+    center: false
+    embed-resources: true
+    width: 1280
+    height: 720
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+if (dir.exists(".r-lib")) {
+  .libPaths(c(normalizePath(".r-lib"), .libPaths()))
+}
+summary_table <- read.csv("../output/cv_comparison/tables/cv_method_summary.csv")
+ranking <- read.csv("../output/cv_comparison/tables/cv_method_ranking.csv")
+checks <- read.csv("../output/cv_comparison/tables/cv_validation_checks.csv")
+case_metrics <- read.csv("../output/final_comparison/model_comparison_metrics.csv")
+```
+
+## Motivation
+
+Zeitreihenprognosen haben eine Richtung.
+
+**Vergangenheit** darf ins Training.  
+**Zukunft** darf erst im Test sichtbar werden.
+
+Viele klassische Cross-Validation-Verfahren verletzen diese Logik teilweise oder vollständig.
+
+## Zentrale Forschungsfrage
+
+> Wie unterscheiden sich Standard-k-fold-CV, blocked CV, h-block CV und rolling-origin CV bei AR-, MA-, ARMA-, Trend- und saisonalen Zeitreihen hinsichtlich der Schätzung des zukünftigen Prognosefehlers?
+
+## Fünf Zeitreihenstrukturen
+
+![Beispielrealisierungen](../output/cv_comparison/figures/01_dgp_example_realizations.png){width="86%"}
+
+## Warum gewöhnliche CV schwierig ist
+
+- Standard-k-fold mischt Zeitpunkte zufällig.
+- Blocked CV validiert zusammenhängende Blöcke, kann aber Zukunft im Training nutzen.
+- h-block entfernt einen Puffer um den Validierungsblock.
+- Rolling-origin trainiert nur auf der Vergangenheit.
+
+<p class="accent">Die Frage ist empirisch: Welche Methode schätzt den späteren Testfehler am besten?</p>
+
+## Vier verglichene CV-Verfahren
+
+![Split-Schema](../output/cv_comparison/figures/02_cv_split_schema.png){width="88%"}
+
+## Monte-Carlo-Design
+
+| Element | Wert |
+|---|---:|
+| Zeitreihenlänge | 250 |
+| Training | 31--184 |
+| Test | 185--250 |
+| Modell | LM mit `lag_1` bis `lag_5` |
+| Wiederholungen | 200 je DGP |
+| ZielGröße | CV-MSE - Test-MSE |
+
+Das Prognosemodell ist für alle CV-Methoden identisch.
+
+## Bias-Ergebnisse
+
+![Bias nach Methode und DGP](../output/cv_comparison/figures/03_bias_by_method_and_dgp.png){width="88%"}
+
+<p class="small">Negative Werte sind optimistisch, positive Werte pessimistisch.</p>
+
+## RMSE der FehlerSchätzung
+
+![RMSE der FehlerSchätzung](../output/cv_comparison/figures/04_rmse_estimation_error.png){width="88%"}
+
+## Streuung der Schätzfehler
+
+![Boxplots der Schätzfehler](../output/cv_comparison/figures/05_estimation_error_boxplots.png){width="88%"}
+
+## Unterschiede zwischen den DGPs
+
+![Heatmap](../output/cv_comparison/figures/09_rmse_heatmap.png){width="72%"}
+
+Die Rangfolge ist nicht stabil über alle Zeitreihenstrukturen.
+
+## Laufzeit und praktische Abwägung
+
+![Laufzeitvergleich](../output/cv_comparison/figures/08_runtime_comparison.png){width="88%"}
+
+Rolling-origin ist oft schnell, nutzt hier aber nur 77 Validierungsvorhersagen. Die anderen drei Methoden nutzen 154.
+
+## Zentrales Fazit zum CV-Vergleich
+
+```{r}
+knitr::kable(ranking)
+```
+
+Es gibt keinen universellen Gewinner. Rolling-origin ist zeitlich sauber und bei Trenddaten stark im Bias. Blocked CV ist oft stabil, aber methodisch nicht zukunftsfrei. h-block hilft besonders bei Seasonal. Standard-k-fold ist theoretisch problematisch, kann in einfachen stationären Szenarien aber konkurrenzfähig sein.
+
+## Zusaetzliche ARMA-Fallstudie
+
+Teil B bleibt als Vertiefung erhalten:
+
+- naive baseline
+- OLS Lag 1
+- OLS Lag 30
+- Ridge Lag 30
+- Lasso Lag 30
+
+```{r}
+case_display <- case_metrics[, c("model", "test_rmse", "test_mae")]
+case_display[, 2:3] <- round(case_display[, 2:3], 4)
+knitr::kable(case_display)
+```
+
+## Limitationen
+
+- Simulierte DGPs, keine realen Strukturbrüche.
+- Einheitliches lineares Lag-Modell.
+- Rolling-origin hat weniger Validierungspunkte.
+- Ergebnisse sind methodisch informativ, aber keine Garantie für jede reale Zeitreihe.
+
+## Schlussfolgerung
+
+<p class="closing-statement">Cross-Validation für Zeitreihen ist keine reine Technikfrage. Die beste Wahl hängt davon ab, ob Zeitrichtung, Bias, Streuung oder Rechenaufwand im konkreten Prognoseproblem wichtiger sind.</p>
+
+<p class="muted">Alle Validierungschecks bestanden: `r all(checks$passed)`</p>
+
+

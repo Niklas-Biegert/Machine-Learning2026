@@ -1,0 +1,9 @@
+"check","passed"
+"same_test_rows_all_models",TRUE
+"sixty_six_predictions_each_model",TRUE
+"metrics_finite",TRUE
+"no_future_values_in_rolling_origin_splits",TRUE
+"test_data_not_used_for_lambda_selection",TRUE
+"pooled_cv_mse_aggregation",TRUE
+"time_order_correct",TRUE
+"result_files_created",TRUE

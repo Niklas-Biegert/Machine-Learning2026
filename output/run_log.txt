@@ -1,0 +1,78 @@
+Machine-Learning2026 run log
+Start time: 2026-07-17 00:16:31 CEST
+End time: 2026-07-17 00:19:24 CEST
+Runtime seconds: 172.88
+Seed: 20260716
+Teil A: zentrale CV-Monte-Carlo-Studie
+  DGPs: AR(1), MA(1), ARMA(1,1), Trend, Seasonal
+  CV methods: kfold, blocked, hblock, rolling_origin
+  primary model: LM-lag5
+  final repetitions per DGP: 200
+  train window: 31-184
+  test window: 185-250
+Teil A ranking:
+       dgp  best_abs_bias best_rmse_estimation_error best_variance
+     AR(1) rolling_origin                    blocked       blocked
+ ARMA(1,1)          kfold                      kfold         kfold
+     MA(1)        blocked                    blocked       blocked
+  Seasonal        blocked                     hblock        hblock
+     Trend rolling_origin                     hblock       blocked
+ fastest_method
+        blocked
+ rolling_origin
+          kfold
+ rolling_origin
+ rolling_origin
+Teil A validation checks:
+                              check_name passed
+        all_expected_result_rows_present   TRUE
+                   all_five_dgps_present   TRUE
+             all_four_cv_methods_present   TRUE
+                     all_runs_successful   TRUE
+                     finite_error_values   TRUE
+                same_train_and_test_size   TRUE
+                      no_test_data_in_cv   TRUE
+  rolling_origin_uses_no_future_training   TRUE
+        hblock_removes_configured_buffer   TRUE
+ blocked_cv_validation_blocks_contiguous   TRUE
+           kfold_assignment_reproducible   TRUE
+         pooled_mse_matches_saved_cv_mse   TRUE
+          lasso_case_study_files_present   TRUE
+                                  details
+     rows= 4000 expected_repetitions= 200
+ AR(1), MA(1), ARMA(1,1), Trend, Seasonal
+   kfold, blocked, hblock, rolling_origin
+                                failed= 0
+       cv_mse, test_mse, estimation_error
+                                   154 66
+                         max_cv_time= 184
+               train max < validation min
+                                     h= 5
+                blocked validation blocks
+     same seed gives same fold assignment
+                       checked rows= 4000
+                                         
+Teil B: bestehende ARMA(1,1)-Fallstudie mit OLS, Ridge und Lasso
+          model n_predictors lambda_min lambda_1se   cv_mse test_mse test_rmse
+ naive_baseline            1         NA         NA 1.688684 1.542809  1.242099
+       ols_lag1            1         NA         NA 1.513570 1.404801  1.185243
+      ols_lag30           30         NA         NA 1.911159 1.375855  1.172969
+    ridge_lag30           30 0.15109265  0.6099636 1.962966 1.425946  1.194130
+    lasso_lag30            7 0.08447303  0.5429988 1.557232 1.311250  1.145098
+  test_mae cv_test_difference runtime_seconds n_test_predictions
+ 1.0282308          0.1458746            0.03                 66
+ 0.9686684          0.1087690            0.03                 66
+ 0.9468178          0.5353033            0.03                 66
+ 0.9647256          0.5370199            0.04                 66
+ 0.9283965          0.2459818            0.02                 66
+Executed scripts:
+  syntax/project_config.R
+  syntax/01_simulate_dgp.R
+  syntax/02_create_lags.R
+  syntax/04_models.R
+  syntax/05_cv_methods.R
+  syntax/06_monte_carlo.R
+  syntax/08_tables_and_interpretation.R
+  syntax/07_plots.R
+  syntax/10_lasso_lag30.R
+  syntax/11_final_model_comparison.R

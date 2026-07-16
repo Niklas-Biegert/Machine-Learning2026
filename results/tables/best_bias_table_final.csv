@@ -1,5 +1,0 @@
-"DGP","CV_Method","Mean_Bias","Abs_Bias"
-"AR(1)","h-block",-1e-04,1e-04
-"ARMA(1,1)","LOOCV",0.0029,0.0029
-"MA(1)","h-block",0.0014,0.0014
-"MA(1)","LOOCV",0.0014,0.0014

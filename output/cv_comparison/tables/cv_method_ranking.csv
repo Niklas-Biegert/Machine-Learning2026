@@ -1,0 +1,6 @@
+"dgp","best_abs_bias","best_rmse_estimation_error","best_variance","fastest_method"
+"AR(1)","rolling_origin","blocked","blocked","blocked"
+"ARMA(1,1)","kfold","kfold","kfold","rolling_origin"
+"MA(1)","blocked","blocked","blocked","kfold"
+"Seasonal","blocked","hblock","hblock","rolling_origin"
+"Trend","rolling_origin","hblock","blocked","rolling_origin"

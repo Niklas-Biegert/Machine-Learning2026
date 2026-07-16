@@ -1,2 +1,0 @@
-"cv_method","previous_cv_method","previous_future_training_values_possible","lambda_min","lambda_1se","n_selected_lags","train_n","test_n","n_splits","train_time_min","train_time_max","test_time_min","test_time_max"
-"rolling_origin_forward_validation","cv.glmnet_blocked_foldid",TRUE,0.0844730325058164,0.542998829386123,7,154,66,5,31,184,185,250

@@ -1,0 +1,2 @@
+"run_label","repetitions_per_dgp","start_time","end_time","runtime_seconds","n_rows","n_split_rows","n_prediction_rows"
+"final",200,"2026-07-17 00:16:35 CEST","2026-07-17 00:18:58 CEST",142.978065013885,4000,20000,539000

@@ -1,6 +1,0 @@
-"split_id","train_start","train_end","validation_start","validation_end","n_train","n_validation"
-1,31,107,108,123,77,16
-2,31,123,124,139,93,16
-3,31,139,140,155,109,16
-4,31,155,156,171,125,16
-5,31,171,172,184,141,13
