@@ -1,0 +1,66 @@
+/*-- scss:defaults --*/
+$font-family-sans-serif: "Segoe UI", Arial, sans-serif;
+$font-family-monospace: "Cascadia Code", Consolas, monospace;
+$body-color: #24303b;
+$headings-color: #0b4f7d;
+$link-color: #177e89;
+$code-color: #a33b20;
+$border-color: #d7e0e5;
+$toc-color: #52616d;
+
+/*-- scss:rules --*/
+body {
+  line-height: 1.65;
+}
+
+h1, h2, h3 {
+  letter-spacing: 0;
+}
+
+h2 {
+  border-bottom: 2px solid #d7e0e5;
+  padding-bottom: 0.35rem;
+}
+
+.quarto-title-banner {
+  background: #eef4f7;
+  border-top: 8px solid #0b4f7d;
+  border-bottom: 1px solid #d7e0e5;
+}
+
+.callout {
+  border-radius: 4px;
+}
+
+.callout-note {
+  border-left-color: #177e89;
+}
+
+table {
+  font-size: 0.92rem;
+}
+
+thead th {
+  background: #eef4f7;
+  color: #0b4f7d;
+}
+
+blockquote {
+  border-left: 4px solid #f05425;
+  background: #fff8f4;
+  padding: 0.65rem 1rem;
+}
+
+figcaption,
+.table-caption {
+  color: #5d6b76;
+}
+
+code {
+  font-size: 0.9em;
+}
+
+.metric-note {
+  color: #52616d;
+  font-size: 0.92rem;
+}

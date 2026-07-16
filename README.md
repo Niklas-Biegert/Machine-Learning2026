@@ -1,122 +1,125 @@
-# Machine-Learning2026
+# Machine Learning 2026
 
-Projekt fuer **Statistical Machine Learning** zum Thema:
 
-**Time Series Cross-Validation for Temporal Data**
+# Zeitreihenprognosen mit Rolling-Origin-Cross-Validation
 
 ## Projektziel
 
-Ziel des Projekts ist ein reproduzierbarer Vergleich verschiedener Cross-Validation-Verfahren fuer Forecasting-Aufgaben mit zeitlich abhaengigen Daten. Dafuer wurde eine Monte-Carlo-Simulation mit **500 Wiederholungen pro daten-generierendem Prozess (DGP)** durchgefuehrt.
+Dieses Projekt untersucht Prognosemodelle für eine simulierte
+ARMA(1,1)-Zeitreihe. Im Mittelpunkt steht nicht nur die Vorhersagegüte,
+sondern auch die Frage, wie zuverlässig eine zeitgerichtete
+Rolling-Origin-Cross-Validation den späteren Fehler auf einem
+vollständig unabhängigen Testzeitraum schätzt.
 
-Untersucht werden drei simulierte Zeitreihenprozesse:
+Die finale Analyse vergleicht eine naive Prognose, zwei OLS-Modelle
+sowie Ridge und Lasso. Alle Modelle verwenden dieselben Beobachtungen
+und werden auf exakt denselben 66 Testzeitpunkten bewertet.
 
-- AR(1)
-- MA(1)
-- ARMA(1,1)
+## Forschungsfrage
 
-Verglichen werden fuenf Cross-Validation-Methoden:
+Wie gut prognostizieren OLS, Ridge und Lasso eine ARMA(1,1)-Zeitreihe
+mit bis zu 30 verzögerten Prädiktoren, und wie zuverlässig schätzt
+Rolling-Origin-Cross-Validation den späteren Testfehler?
 
-- k-fold Cross-Validation
-- Leave-One-Out Cross-Validation (LOOCV)
-- Rolling-origin Cross-Validation
-- Blocked Cross-Validation
-- h-block Cross-Validation
+## Vorgehen
 
-Als Forecasting-Modelle werden zwei lineare Lag-Modelle verwendet:
+- Daten-generierender Prozess: ARMA(1,1)
+- Zeitreihenlänge: `T = 250`
+- Prädiktoren: `lag_1` bis `lag_30`
+- Training: Zeitpunkte 31 bis 184 (`n = 154`)
+- unabhängiger Test: Zeitpunkte 185 bis 250 (`n = 66`)
+- Validierung: fünf lückenlose, zeitgerichtete Rolling-Origin-Splits
+- Modelle: naive Baseline, OLS Lag 1, OLS Lag 30, Ridge Lag 30 und Lasso
+  Lag 30
+- Auswahl von `lambda`: ausschließlich innerhalb der Trainingsdaten
+- Testmetriken: MSE, RMSE und MAE
 
-- `LM-lag1`
-- `LM-lag5`
+## Zentrale Ergebnisse
 
-Die zentrale Frage ist, welche CV-Methode den spaeteren Hold-out-Testfehler am verlaesslichsten schaetzt und dadurch robuste Modellentscheidungen ermoeglicht.
+| Modell         | Prädiktoren |     CV-MSE |  Test-RMSE |   Test-MAE |
+|----------------|------------:|-----------:|-----------:|-----------:|
+| Naive Baseline |           1 |     1.6887 |     1.2421 |     1.0282 |
+| OLS Lag 1      |           1 | **1.5136** |     1.1852 |     0.9687 |
+| OLS Lag 30     |          30 |     1.9112 |     1.1730 |     0.9468 |
+| Ridge Lag 30   |          30 |     1.9630 |     1.1941 |     0.9647 |
+| Lasso Lag 30   |           7 |     1.5572 | **1.1451** | **0.9284** |
 
-## Ordnerstruktur
+Lasso erzielt auf dem unabhängigen Testzeitraum den niedrigsten RMSE und
+MAE und setzt nur 7 von 30 Lag-Koeffizienten ungleich null. Der
+Vorsprung gegenüber OLS mit 30 Lags ist vorhanden, aber moderat.
+Gleichzeitig weist OLS Lag 1 den kleinsten Rolling-Origin-CV-MSE auf.
+Die Cross-Validation hat Lasso in diesem Lauf daher nicht eindeutig als
+bestes Modell ausgewählt; sie bevorzugt nach ihrem eigenen
+Fehlerkriterium das einfachere Ein-Lag-Modell.
 
-```text
-.
-|-- R/                         # R-Skripte fuer Simulation, CV, Modelle, Plots und Tabellen
-|-- data/                      # optionale Rohdaten oder verarbeitete Daten
-|-- docs/                      # Notizen, Theorieuebersicht und LaTeX/PDF-Uebersicht
-|-- experiments/               # Experimentnotizen und Konfigurationen
-|-- notebooks/                 # explorative Analysen
-|-- project_management/        # Projektplan und organisatorische Notizen
-|-- references/                # Vorlesungsfolien und Projektmaterial
-|-- reports/                   # Entwuerfe fuer Paper und Praesentation
+## Reproduzierbarer Ablauf
+
+Die gesamte Analyse lässt sich aus einer leeren R-Sitzung mit einem
+Befehl ausführen. Benötigt werden R sowie die Pakete `here` und
+`glmnet`.
+
+Plattformunabhängig:
+
+``` bash
+Rscript R/99_run_all.R
+```
+
+Unter Windows mit dem im Projekt verwendeten R:
+
+``` powershell
+& 'C:\Program Files\R\R-4.5.1\bin\Rscript.exe' R\99_run_all.R
+```
+
+Der feste Seed ist `20260716`. `R/99_run_all.R` prüft am Ende unter
+anderem die Testzeilen, die Zeitrichtung der Rolling-Origin-Splits,
+gültige Lambda-Werte und das Vorhandensein aller finalen Resultate.
+
+## Projektstruktur
+
+``` text
+Machine-Learning2026/
+|-- R/
+|   |-- 01_simulate_dgp.R
+|   |-- 02_create_lags.R
+|   |-- 03_train_test_split.R
+|   |-- 10_lasso_lag30.R
+|   |-- 11_final_model_comparison.R
+|   `-- 99_run_all.R
 |-- results/
-|   |-- figures/               # finale Plots fuer Bericht und Praesentation
-|   `-- tables/                # finale Ergebnistabellen und gespeicherte Simulationsergebnisse
-|-- src/                       # ggf. wiederverwendbarer Code
-|-- tests/                     # Tests
-|-- paper.qmd                  # Quarto-Bericht fuer die Abgabe
-`-- README.md                  # Projektuebersicht und Ausfuehrungsanleitung
+|   |-- lasso/
+|   `-- final_comparison/
+|-- docs/
+|-- references/
+|-- project_report.qmd
+|-- project_report.html
+|-- presentation.qmd
+|-- presentation.html
+`-- README.qmd
 ```
 
-## Reihenfolge zum Ausfuehren der Skripte
+## Wichtige Dateien
 
-Die Skripte sind nummeriert und sollten in dieser Reihenfolge ausgefuehrt werden:
+- [`R/99_run_all.R`](R/99_run_all.R): zentraler reproduzierbarer
+  Gesamtlauf.
+- [`R/project_config.R`](R/project_config.R): Seed, Lag-Anzahl sowie
+  Train-, Test- und CV-Konfiguration.
+- [`R/10_lasso_lag30.R`](R/10_lasso_lag30.R): Lasso mit eigener
+  zeitgerichteter Lambda-Auswahl.
+- [`R/11_final_model_comparison.R`](R/11_final_model_comparison.R):
+  finaler Vergleich aller fünf Modelle.
+- [`results/final_comparison/model_comparison_metrics.csv`](results/final_comparison/model_comparison_metrics.csv):
+  zentrale Ergebnistabelle.
+- [`project_report.html`](project_report.html): vollständiger
+  Projektbericht.
+- [`presentation.html`](presentation.html): Präsentation für den
+  15-minütigen Vortrag.
 
-```r
-source("R/00_setup.R")
-source("R/01_simulate_dgp.R")
-source("R/02_create_lags.R")
-source("R/03_train_test_split.R")
-source("R/04_models.R")
-source("R/05_cv_methods.R")
-source("R/06_monte_carlo.R")
-source("R/07_plots.R")
-source("R/08_tables_and_interpretation.R")
-```
+## Dokumentation
 
-Optional bzw. fuer den Bericht:
-
-```r
-rmarkdown::render("R/09_export_tables_for_report.Rmd")
-```
-
-Der Quarto-Bericht kann anschliessend gerendert werden mit:
-
-```bash
-quarto render paper.qmd
-```
-
-Hinweis: Die Monte-Carlo-Simulation ist der zeitaufwendigste Schritt. Fuer die Abgabe muessen die Simulationen nicht jedes Mal neu gerechnet werden, wenn die Ergebnisse bereits in `results/tables/` und `results/figures/` gespeichert sind.
-
-## Wichtigste Dateien
-
-### R-Skripte
-
-- `R/00_setup.R`: laedt benoetigte Pakete und zentrale Einstellungen.
-- `R/01_simulate_dgp.R`: definiert die daten-generierenden Prozesse AR(1), MA(1) und ARMA(1,1).
-- `R/02_create_lags.R`: erzeugt Lag-Features fuer die Forecasting-Modelle.
-- `R/03_train_test_split.R`: erstellt zeitlich geordnete Train-Test-Splits.
-- `R/04_models.R`: definiert die Modelle `LM-lag1` und `LM-lag5`.
-- `R/05_cv_methods.R`: implementiert k-fold, LOOCV, rolling-origin, blocked CV und h-block CV.
-- `R/06_monte_carlo.R`: fuehrt die Monte-Carlo-Simulationen aus.
-- `R/07_plots.R`: erstellt die finalen Abbildungen.
-- `R/08_tables_and_interpretation.R`: erzeugt finale Tabellen und Ergebniszusammenfassungen.
-- `R/09_export_tables_for_report.Rmd`: exportiert bzw. dokumentiert Tabellen fuer den Bericht.
-
-### Bericht und Dokumentation
-
-- `paper.qmd`: Quarto-Bericht mit Introduction, Methodology, Simulation Design, Results, Discussion, Limitations und Conclusion.
-- `docs/thema_05_latex_uebersicht.tex`: LaTeX-Uebersicht mit Definitionen und Vorgehen.
-- `docs/thema_05_latex_uebersicht.pdf`: PDF-Version der Theorie- und Vorgehensuebersicht.
-
-### Ergebnisse
-
-Wichtige Tabellen in `results/tables/`:
-
-- `summary_table_final.csv`
-- `bias_sd_table_final.csv`
-- `model_selection_table_final.csv`
-- `best_bias_table_final.csv`
-
-Wichtige Plots in `results/figures/`:
-
-- `plot_bias_mean.png`
-- `plot_bias_boxplot.png`
-- `plot_test_error.png`
-- `plot_model_selection.png`
-
-## Kurzinterpretation
-
-In den finalen Ergebnissen liegen **h-block CV** und **LOOCV** in mehreren DGPs am naechsten bei Bias 0. **Rolling-origin CV** zeigt in diesem konkreten Setup einen staerkeren negativen Bias und eine hoehere Bias-Streuung. Dieses Ergebnis sollte vorsichtig interpretiert werden, weil rolling-origin CV stark von der Wahl von Forecast-Horizon, Step-Size und Validierungsfenster abhaengt.
+- [Vollständiger Projektbericht](project_report.html)
+- [Quarto-Quelldatei des Berichts](project_report.qmd)
+- [HTML-Präsentation](presentation.html)
+- [Quarto-Quelldatei der Präsentation](presentation.qmd)
+- [Persönlicher Projekt-Styleguide](docs/project_style_guide.md)
+- [Stilvergleich mit
+  SAE_WS25](docs/style_comparison_SAE_WS25_vs_Machine_Learning2026.md)

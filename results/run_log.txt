@@ -1,6 +1,6 @@
 Machine-Learning2026 run log
-Start time: 2026-07-16 18:57:41 CEST
-End time: 2026-07-16 18:57:42 CEST
+Start time: 2026-07-16 21:05:23 CEST
+End time: 2026-07-16 21:05:25 CEST
 Seed: 20260716
 Configuration:
   max_lag: 30
@@ -29,11 +29,11 @@ Final model metrics:
     ridge_lag30           30 0.15109265  0.6099636 1.962966 1.425946  1.194130
     lasso_lag30            7 0.08447303  0.5429988 1.557232 1.311250  1.145098
   test_mae cv_test_difference runtime_seconds n_test_predictions
- 1.0282308          0.1458746            0.02                 66
- 0.9686684          0.1087690            0.01                 66
- 0.9468178          0.5353033            0.02                 66
+ 1.0282308          0.1458746            0.03                 66
+ 0.9686684          0.1087690            0.03                 66
+ 0.9468178          0.5353033            0.03                 66
  0.9647256          0.5370199            0.04                 66
- 0.9283965          0.2459818            0.01                 66
+ 0.9283965          0.2459818            0.02                 66
 Best model by RMSE: lasso_lag30
 Best model by MAE: lasso_lag30
 Validation checks:

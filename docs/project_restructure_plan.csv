@@ -1,0 +1,18 @@
+current_path,proposed_path,change_type,reason,required_code_changes,risk,priority
+README.qmd,README.qmd,content_style_update,"Deutsche Abschnittslogik und kompaktere persönliche Darstellung","Keine Pfadänderung; README.md neu rendern",low,required
+README.md,README.md,rendered_update,"GitHub-README aus der Quarto-Quelle synchron halten","Quarto-Rendering",low,required
+project_report.qmd,project_report.qmd,content_style_update,"Methodenentscheidungen und Ergebnislogik im Stil Ziel-Vorgehen-Ergebnis-Grenzen schärfen","Keine Modell- oder Ergebnisänderung",low,required
+project_report.html,project_report.html,rendered_update,"HTML mit angepasstem Stil neu erzeugen","Quarto-Rendering",low,required
+presentation.qmd,presentation.qmd,content_style_update,"Dramaturgie und Abschluss an den persönlichen Präsentationsstil angleichen","Keine Resultatpfade ändern",low,required
+presentation.html,presentation.html,rendered_update,"Präsentation mit angepasstem Stil neu erzeugen","Quarto-Rendering",low,required
+styles.scss,styles.scss,visual_style_update,"Dunkelblau-Türkis-Grün-Koralle als konsistente persönliche Palette","Nur CSS/SCSS",low,sensible
+presentation.scss,presentation.scss,visual_style_update,"Präsentationsfarben und Typografie an dieselbe Palette angleichen","Nur CSS/SCSS",low,sensible
+_quarto.yml,_quarto.yml,configuration_review,"Deutsche Projektsprache und gemeinsame Render-Einstellungen dokumentieren","Keine Pfadänderung",low,sensible
+docs/,docs/,add_documentation,"Vergleich, Styleguide und Migrationsentscheidungen nachvollziehbar speichern","Keine Codeänderung",low,required
+R/,R/,keep_path,"Modulare reproduzierbare Pipeline ist für dieses Projekt geeigneter als syntax/","Keine",low,required
+R/project_config.R,R/project_config.R,keep_name,"Expliziter Name ist eindeutiger als 00_config.R und vermeidet Pfadrisiko","Keine",low,required
+results/,results/,keep_path,"Fachlich gegliederte Resultate sind klarer als ein gemeinsamer output-Ordner","Keine",low,required
+results/lasso/previous_blocked_cv/,results/lasso/previous_blocked_cv/,keep_archive,"Historischer Audit bleibt klar vom finalen Input getrennt","Keine; 99_run_all.R verwendet ihn nicht",low,required
+project_report.qmd,report/project_report.qmd,not_implemented,"Ein report-Ordner wäre optisch möglich, würde aber Links und Renderpfade ohne fachlichen Nutzen ändern","Viele Dokument- und GitHub-Links",medium,optional
+presentation.qmd,presentation/presentation.qmd,not_implemented,"Ein eigener Ordner wäre erst bei mehreren Präsentationsartefakten sinnvoll","README- und Renderpfade",medium,optional
+R/07_plots.R,R/theme_project.R,not_implemented,"Zentrale Theme-Funktion erst bei einer künftigen Neuerzeugung aller Ergebnisplots einführen","Plotcode und alle Grafiken neu erzeugen",medium,optional

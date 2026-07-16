@@ -1,0 +1,159 @@
+---
+title: "Regularisierte Regression für Zeitreihenprognosen"
+subtitle: "OLS, Ridge und Lasso mit Rolling-Origin-Cross-Validation"
+author: "Niklas Biegert"
+date: "12. August 2026"
+format:
+  revealjs:
+    theme: [simple, presentation.scss]
+    slide-number: true
+    controls: true
+    progress: true
+    transition: none
+    background-transition: none
+    center: false
+    embed-resources: true
+    width: 1280
+    height: 720
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Die zentrale Frage
+
+> Wie gut prognostizieren OLS, Ridge und Lasso eine ARMA(1,1)-Zeitreihe mit bis zu 30 Lags?
+
+Und: Schätzt eine zeitgerichtete Cross-Validation den späteren Testfehler zuverlässig?
+
+## Zufällige Folds passen nicht zur Prognosesituation
+
+Bei Zeitreihen hat Information eine Richtung:
+
+**Vergangenheit** → **Training** → **spätere Validierung**
+
+Eine blockierte Fold-Zuweisung allein reicht nicht aus. Wenn jeweils alle anderen Folds trainieren, können spätere Beobachtungen in das Training eines früheren Validierungsblocks gelangen.
+
+<p class="accent">Konsequenz: Die Lambda-Auswahl braucht echte Forward-Validation.</p>
+
+## Ein kontrolliertes ARMA(1,1)-Szenario
+
+$$
+y_t = 0{,}6y_{t-1} + \varepsilon_t + 0{,}5\varepsilon_{t-1},
+\qquad \varepsilon_t \sim \mathcal{N}(0,1)
+$$
+
+- (T = 250), fester Seed `20260716`
+- 30 mögliche Prädiktoren: `lag_1` bis `lag_30`
+- nach Lag-Erzeugung: Zeitpunkte 31 bis 250
+- keine zufällige Mischung der Beobachtungen
+
+## Der Testzeitraum bleibt bis zum Schluss unberührt
+
+| Bereich | Zeitpunkte | (n) | Verwendung |
+|---|---:|---:|---|
+| Training | 31--184 | 154 | Schätzung und Rolling-Origin-CV |
+| Test | 185--250 | 66 | einmalige finale Evaluation |
+
+Die Standardisierung von Ridge und Lasso wird in jedem Trainingsfenster separat gelernt.
+
+## Fünf lückenlose Rolling-Origin-Splits
+
+| Split | Training | Validierung | (n_{val}) |
+|---:|---:|---:|---:|
+| 1 | 31--107 | 108--123 | 16 |
+| 2 | 31--123 | 124--139 | 16 |
+| 3 | 31--139 | 140--155 | 16 |
+| 4 | 31--155 | 156--171 | 16 |
+| 5 | 31--171 | 172--184 | 13 |
+
+Der CV-MSE wird über alle 77 Validierungsvorhersagen gepoolt:
+
+$$\operatorname{CV-MSE}(\lambda)=\frac{\sum_s \operatorname{SSE}_s(\lambda)}{\sum_s n_s}.$$
+
+## Fünf Modelle, eine gemeinsame Vergleichsbasis
+
+1. **Naive Baseline:** ŷₜ = yₜ₋₁
+2. **OLS Lag 1:** ein geschätzter Lag-Koeffizient
+3. **OLS Lag 30:** alle 30 Lags ohne Strafe
+4. **Ridge Lag 30:** L2-Strafe, alle Koeffizienten geschrumpft
+5. **Lasso Lag 30:** L1-Strafe, Variablenauswahl möglich
+
+Ridge und Lasso verwenden `lambda.min` als Hauptlösung; `lambda.1se` bleibt als Robustheitswert gespeichert.
+
+## Lasso erreicht den niedrigsten Testfehler
+
+![Test-RMSE und Test-MAE für alle fünf Modelle](results/final_comparison/figures/01_test_rmse_mae_comparison.png){fig-alt="Gruppierte Balken mit Test-RMSE und Test-MAE für fünf Modelle" width="88%"}
+
+<p class="small"><span class="accent">Lasso:</span> RMSE 1.1451, MAE 0.9284. Der RMSE liegt rund 2.4 % unter OLS Lag 30.</p>
+
+## Die Cross-Validation bevorzugt OLS Lag 1
+
+![Rolling-Origin-CV-MSE gegenüber dem tatsächlichen Test-MSE](results/final_comparison/figures/02_cv_mse_vs_test_mse.png){fig-alt="Balkenvergleich von CV-MSE und Test-MSE je Modell" width="88%"}
+
+<p class="small">OLS Lag 1 hat den kleinsten CV-MSE (1.5136), Lasso den zweitkleinsten (1.5572). CV überschätzt den Test-MSE bei allen Modellen.</p>
+
+## Die Prognosen unterscheiden sich nur in Details
+
+![Beobachtete und vorhergesagte Werte im unabhängigen Testzeitraum](results/final_comparison/figures/03_test_predictions_over_time.png){fig-alt="Linien der beobachteten und vorhergesagten Testwerte von time 185 bis 250" width="94%"}
+
+<p class="small">Alle Modelle folgen dem Grundverlauf. Unterschiede entstehen vor allem an Spitzen, Wendepunkten und einzelnen größeren Fehlern.</p>
+
+## Lasso reduziert 30 mögliche Lags auf sieben
+
+![Lag-Koeffizienten von OLS, Ridge und Lasso](results/final_comparison/figures/04_coefficients_ols_ridge_lasso.png){fig-alt="Lag-Koeffizienten der drei Regressionsansätze" width="90%"}
+
+| Aktiv bei Lasso | Koeffizient |
+|---|---:|
+| `lag_1` | 0.8419 |
+| `lag_2` | -0.1576 |
+| `lag_18`, `lag_19`, `lag_20`, `lag_24`, `lag_30` | klein, negativ |
+
+## Die Lambda-Entscheidung ist nachvollziehbar gespeichert
+
+![Gepoolter Lasso-Validierungsfehler über log(lambda)](results/lasso/figures/lasso_cv_plot.png){fig-alt="Lasso-Fehlerkurve mit lambda min und lambda 1se" width="86%"}
+
+- Lasso: `lambda.min = 0.08447`, `lambda.1se = 0.54300`
+- Ridge: `lambda.min = 0.15109`, `lambda.1se = 0.60996`
+- Das finale Modell verwendet jeweils `lambda.min`
+
+## Drei stille Fehlerquellen wurden korrigiert
+
+| Erkannter Punkt | Finale Lösung |
+|---|---|
+| Blockierte `foldid`-CV konnte Zukunft verwenden | eigene Forward-Schleife |
+| einzelne Zeitpunkte zwischen Splits übersprungen | lückenlose Split-Grenzen |
+| fünf Split-MSEs trotz ungleicher Größe gemittelt | gepoolte SSE über 77 Vorhersagen |
+
+Zusätzlich prüfen automatische Tests: 66 Vorhersagen je Modell, identische Testzeilen, endliche Kennzahlen, gültige Lambdas und keine Testdaten bei der Auswahl.
+
+## Fazit: Lasso ist die vorsichtige Empfehlung
+
+**Empfehlung:** Lasso Lag 30 als finales Projektmodell.
+
+- niedrigster Test-RMSE und Test-MAE
+- nur 7 aktive Lags
+- moderater Vorteil gegenüber OLS Lag 30
+- keine allgemeine Überlegenheitsaussage aus einer einzelnen simulierten Reihe
+
+**Methodische Kernaussage:** Zeitreihen-CV ist erst dann zeitgerecht, wenn jeder Validierungsblock ausschließlich mit seiner Vergangenheit trainiert wird.
+
+## Was die Ergebnisse nicht zeigen
+
+- keine durchschnittliche Leistung über viele neue ARMA(1,1)-Reihen
+- keine Garantie für reale, nichtstationäre Zeitreihen
+- keine statistisch abgesicherte Signifikanz kleiner RMSE-Unterschiede
+- keine Aussage über andere Horizonte oder Rolling-Window-Designs
+
+Der vollständige Lauf ist reproduzierbar mit:
+
+<p><code>Rscript R/99_run_all.R</code></p>
+
+Die gespeicherten Resultate werden anschließend von Quarto eingelesen.
+
+## Fragen
+
+<p class="closing-statement">Zeitreihen-Cross-Validation ist nur dann glaubwürdig, wenn die Zeitrichtung in jedem einzelnen Validierungsschritt erhalten bleibt.</p>
+
+<p class="muted">Niklas Biegert · Statistical Machine Learning · Universität Bamberg</p>
