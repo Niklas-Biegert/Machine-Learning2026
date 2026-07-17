@@ -30,25 +30,80 @@ ranking <- read.csv("../output/cv_comparison/tables/cv_method_ranking.csv")
 checks <- read.csv("../output/cv_comparison/tables/cv_validation_checks.csv")
 run_info <- read.csv("../output/cv_comparison/tables/cv_run_info_final.csv")
 case_metrics <- read.csv("../output/final_comparison/model_comparison_metrics.csv")
+case_coefficients <- read.csv("../output/final_comparison/tables/model_coefficients_lag1_to_lag30.csv")
+
+fmt <- function(x, digits = 3) {
+  formatC(as.numeric(x), format = "f", digits = digits, decimal.mark = ",")
+}
+
+get_metric <- function(dgp_name, method_name, column_name, digits = 3) {
+  value <- summary_table[summary_table$dgp == dgp_name & summary_table$cv_method == method_name, column_name]
+  fmt(value, digits)
+}
+
+summary_display <- summary_table[, c(
+  "dgp", "cv_method", "bias", "abs_bias", "var_estimation_error",
+  "rmse_estimation_error", "mae_estimation_error", "optimistic_share"
+)]
+summary_display$best_marker <- ""
+for (dgp_name in unique(summary_display$dgp)) {
+  idx <- summary_display$dgp == dgp_name
+  summary_display$best_marker[idx & summary_display$abs_bias == min(summary_display$abs_bias[idx])] <- paste(
+    summary_display$best_marker[idx & summary_display$abs_bias == min(summary_display$abs_bias[idx])], "Bias"
+  )
+  summary_display$best_marker[idx & summary_display$rmse_estimation_error == min(summary_display$rmse_estimation_error[idx])] <- paste(
+    summary_display$best_marker[idx & summary_display$rmse_estimation_error == min(summary_display$rmse_estimation_error[idx])], "RMSE"
+  )
+  summary_display$best_marker[idx & summary_display$var_estimation_error == min(summary_display$var_estimation_error[idx])] <- paste(
+    summary_display$best_marker[idx & summary_display$var_estimation_error == min(summary_display$var_estimation_error[idx])], "Varianz"
+  )
+}
+summary_display$best_marker <- trimws(summary_display$best_marker)
+summary_display$best_marker[summary_display$best_marker == ""] <- "-"
+summary_display <- data.frame(
+  DGP = summary_display$dgp,
+  Methode = summary_display$cv_method,
+  Bias = fmt(summary_display$bias),
+  `Abs. Bias` = fmt(summary_display$abs_bias),
+  Varianz = fmt(summary_display$var_estimation_error),
+  RMSE = fmt(summary_display$rmse_estimation_error),
+  MAE = fmt(summary_display$mae_estimation_error),
+  `Optimistischer Anteil` = fmt(summary_display$optimistic_share),
+  `Bestes Kriterium` = summary_display$best_marker,
+  check.names = FALSE
+)
+
+lasso_active_lags <- case_coefficients[
+  case_coefficients$model == "lasso_lag30" & case_coefficients$coefficient != 0,
+]
 ```
 
 # Projekt in Kürze
 
-In diesem Projekt untersuchen wir, wie gut vier Cross-Validation-Verfahren den späteren Prognosefehler bei Zeitreihen schätzen. Verglichen werden Standard-k-fold, blocked CV, h-block CV und rolling-origin CV auf fünf simulierten Zeitreihenstrukturen: AR(1), MA(1), ARMA(1,1), Trend und Seasonal.
+In diesem Projekt untersuchen wir, wie gut vier Cross-Validation-Verfahren den zukünftigen Prognosefehler bei Zeitreihen schätzen. Verglichen werden Standard-k-fold-Cross-Validation, blocked Cross-Validation, h-block Cross-Validation und rolling-origin Cross-Validation. Die Verfahren werden auf fünf simulierten Zeitreihenstrukturen angewendet: AR(1), MA(1), ARMA(1,1), Trend und saisonale Zeitreihe.
 
-Die zentrale Monte-Carlo-Studie verwendet `r run_info$repetitions_per_dgp` Wiederholungen pro DGP. Uns war wichtig, für alle CV-Verfahren dasselbe Modell zu verwenden. Dadurch können die Unterschiede besser auf die Validierungsmethode zurückgeführt werden.
+Die Arbeit ist als kontrollierte Monte-Carlo-Studie aufgebaut. Für jede simulierte Zeitreihe wird zuerst ein gemeinsames Prognosemodell geschätzt. Danach wird der CV-MSE jeder Validierungsmethode mit dem Fehler in einem unabhängigen späteren Testzeitraum verglichen. Dadurch geht es nicht darum, das beste Modell für jede Zeitreihe zu finden. Im Mittelpunkt steht die Frage, welche Validierungslogik den späteren Testfehler in diesem Design möglichst gut annähert.
 
-::: {.callout-note}
-Die Ridge-/Lasso-Analyse aus der früheren Projektfassung bleibt als zusätzliche ARMA(1,1)-Fallstudie erhalten. Sie ist Teil B, nicht die zentrale Forschungsfrage.
-:::
+
+# Motivation
+
+Bei unabhängigen Beobachtungen ist eine zufällige Aufteilung in Trainings- und Validierungsdaten oft unkritisch. Bei Zeitreihen gehört die Reihenfolge der Beobachtungen jedoch zur Datenstruktur. Der Wert zu einem Zeitpunkt hängt typischerweise mit früheren Werten zusammen, und in realen Prognosesituationen stehen zukünftige Beobachtungen beim Trainieren noch nicht zur Verfügung. Wenn ein Validierungsverfahren diese Reihenfolge ignoriert, kann es die spätere Prognosesituation zu günstig darstellen.
+
+Das Problem ist nicht nur formal. Wenn zukünftige Beobachtungen zur Bewertung früherer Zeitpunkte indirekt im Training landen, entsteht eine Form von Data Leakage. Das Modell nutzt dann Informationen aus einer Zeit, die im echten Prognoseproblem noch unbekannt wäre. Dadurch kann der CV-Fehler kleiner wirken als der Fehler, der später tatsächlich im Testzeitraum auftritt. Genau diese Differenz ist für die Modellbewertung relevant, weil eine zu optimistische Fehlerschätzung zu einer falschen Einschätzung der Prognosequalität führen kann.
+
+Zeitreihen benötigen deshalb Validierungsverfahren, die zeitliche Abhängigkeit und Prognoserichtung stärker berücksichtigen. Gleichzeitig ist nicht von vornherein klar, welches Verfahren in welcher Situation am besten funktioniert. Ein AR(1)-Prozess hat eine andere Abhängigkeitsstruktur als eine saisonale oder trendbehaftete Zeitreihe. Deshalb werden mehrere einfache Datengenerierungsprozesse untersucht. Sie sollen typische Strukturen isoliert sichtbar machen, ohne die Interpretation durch ein sehr komplexes reales Datenset zu erschweren.
 
 # Forschungsfrage
 
+Die zentrale Forschungsfrage lautet:
+
 > Wie unterscheiden sich Standard-k-fold-Cross-Validation, blocked Cross-Validation, h-block Cross-Validation und rolling-origin Cross-Validation bei AR-, MA-, ARMA-, Trend- und saisonalen Zeitreihen hinsichtlich der Schätzung des zukünftigen Prognosefehlers?
+
+Mit Prognosefehler ist hier der mittlere quadratische Fehler im späteren Testzeitraum gemeint. Mit CV-Fehlerschätzung ist der mittlere Fehler gemeint, der innerhalb des Trainingszeitraums durch Cross-Validation geschätzt wird. Eine gute Methode sollte nicht nur einen kleinen CV-MSE erzeugen, sondern den späteren Test-MSE möglichst realistisch treffen.
 
 # Zentrale Konfiguration
 
-Die wichtigsten Parameter stehen gesammelt in `syntax/project_config.R`. Das macht den Lauf nachvollziehbar: Zeitreihenlänge, Testfenster, Seeds, CV-Splits und DGP-Parameter werden nicht verstreut im Projekt gesetzt.
+Die wichtigsten Parameter stehen gesammelt in `syntax/project_config.R`. Das macht den Lauf nachvollziehbar: Zeitreihenlänge, Testfenster, Seeds, CV-Splits und DGP-Parameter werden nicht verstreut im Projekt gesetzt. Für die Hauptstudie gilt `T = 250`, der Testzeitraum beginnt bei Zeitpunkt 185, es werden fünf Folds verwendet und h-block nutzt einen Puffer von `h = 5`. Die finale Monte-Carlo-Studie verwendet 200 Wiederholungen je DGP.
 
 ```{r}
 knitr::kable(data.frame(
@@ -97,16 +152,35 @@ seasonal_period = 12,
 
 # Datengenerierende Prozesse
 
-Die fünf Szenarien sind bewusst einfach gehalten. Sie sollen typische Zeitreihenstrukturen abdecken, ohne die Interpretation durch ein zu kompliziertes Modell zu verdecken.
+Die fünf Szenarien sind bewusst so gewählt, dass sie drei unterschiedliche Gruppen von Zeitreihenstrukturen abdecken. AR(1), MA(1) und ARMA(1,1) stehen für stationäre lineare Zeitabhängigkeit. Der Trend-DGP ergänzt ein veränderliches Niveau, bei dem frühe und späte Beobachtungen nicht vollständig aus derselben zeitlichen Situation stammen. Die saisonale Reihe ergänzt ein periodisches Muster, bei dem die Position innerhalb eines Zyklus wichtig ist.
 
-- AR(1): \(y_t = 0.7 y_{t-1} + \varepsilon_t\)
-- MA(1): \(y_t = \varepsilon_t + 0.6\varepsilon_{t-1}\)
-- ARMA(1,1): \(y_t = 0.6y_{t-1} + \varepsilon_t + 0.5\varepsilon_{t-1}\)
-- Trend: \(y_t = 0 + 0.03t + \varepsilon_t\)
-- Seasonal: \(y_t = 2\sin(2\pi t / 12) + \varepsilon_t\)
+Würden nur AR(1), MA(1) und ARMA(1,1) untersucht, wären die Aussagen des Projekts weitgehend auf stationäre ARMA-ähnliche Prozesse beschränkt. Die zusätzlichen Trend- und Saison-Szenarien testen, ob die CV-Verfahren auch dann ähnlich reagieren, wenn die Zeitstruktur stärker von der Reihenfolge der Beobachtungen abhängt.
 
-Dabei gilt jeweils \(\varepsilon_t \sim \mathcal{N}(0,1)\). Für stationäre Prozesse wird eine Burn-in-Phase von 100 Beobachtungen verworfen.
+```{r}
+knitr::kable(data.frame(
+  Struktur = c("Stationäre Abhängigkeit", "Veränderliches Niveau", "Periodisches Muster"),
+  DGPs = c("AR(1), MA(1), ARMA(1,1)", "Trend", "Saisonalität"),
+  Zweck = c(
+    "Vergleich bei stabiler zeitlicher Struktur",
+    "Vergleich bei zeitlich steigendem Erwartungswert",
+    "Vergleich bei regelmäßig wiederkehrenden Schwankungen"
+  )
+), caption = "Warum fünf Datengenerierungsprozesse verwendet werden.")
+```
 
+In allen Fällen hat die simulierte Zeitreihe die Länge `T = 250`, und die Innovationsvarianz wird über `sigma = 1` konstant gehalten.
+
+AR(1) verwendet `phi = 0.7`. Der aktuelle Wert hängt also positiv vom direkten vorherigen beobachteten Wert ab. Der Prozess ist stationär, weil der autoregressive Parameter betragsmäßig kleiner als eins ist. Er ist sinnvoll, weil viele einfache Zeitreihen eine Persistenz von einem Zeitpunkt zum nächsten zeigen.
+
+MA(1) verwendet `theta = 0.6`. Hier hängt der aktuelle Wert vom aktuellen Zufallsfehler und vom Zufallsfehler des vorherigen Zeitpunkts ab. Auch dieser Prozess ist stationär. Er zeigt eine kurzfristige Fehlerabhängigkeit, ohne dass der beobachtete Vorwert direkt in die Gleichung eingeht.
+
+ARMA(1,1) kombiniert beide Ideen mit `phi = 0.6` und `theta = 0.5`. Der Prozess enthält eine autoregressive Komponente und eine Moving-Average-Komponente. Dadurch ist er näher an stationären Zeitreihen, bei denen sowohl vergangene Werte als auch vergangene Schocks eine Rolle spielen können.
+
+Der Trend-DGP folgt `y_t = 0 + 0.03t + epsilon_t`. Der Erwartungswert verändert sich systematisch über die Zeit. Eine zufällige CV-Aufteilung vermischt deshalb frühe und späte Zeitpunkte und kann die spätere Prognosesituation verzerren. Der Trend-DGP testet, wie die Verfahren mit einem veränderlichen Niveau umgehen.
+
+Die saisonale Zeitreihe folgt `y_t = 2 * sin(2*pi*t/12) + epsilon_t`. Das Muster wiederholt sich alle zwölf Zeitpunkte. Die zeitliche Position innerhalb eines saisonalen Zyklus ist relevant, und eine zufällige Aufteilung kann Beobachtungen aus verschiedenen Zyklen vermischen. Der saisonale DGP testet deshalb, wie die Verfahren mit periodisch wiederkehrenden Schwankungen umgehen.
+
+Bei den stationären Prozessen wird ein Burn-in von 100 Beobachtungen verwendet. Der Burn-in sorgt dafür, dass Startwerte am Anfang der Simulation weniger Einfluss auf die ausgewertete Zeitreihe haben. Die ersten simulierten Werte werden also verworfen, bevor die eigentliche Zeitreihe mit Länge 250 gespeichert wird.
 ```{r}
 #| echo: true
 #| eval: false
@@ -122,44 +196,74 @@ y[i] <- epsilon[i] + theta * epsilon[i - 1]
 y[i] <- phi * y[i - 1] + epsilon[i] + theta * epsilon[i - 1]
 
 # Trend: deterministische lineare Entwicklung plus Zufallsfehler.
-beta0 + beta1 * time + rnorm(T, mean = 0, sd = sigma)
+y <- beta0 + beta1 * time + epsilon
 
-# Seasonal: sinusfürmige Saisonkomponente mit Periode 12 plus Zufallsfehler.
-amplitude * sin(2 * pi * time / period) + rnorm(T, mean = 0, sd = sigma)
+# Seasonal: sinusförmige Saisonkomponente mit Periode 12 plus Zufallsfehler.
+y <- amplitude * sin(2 * pi * time / period) + epsilon
 ```
 
-![Beispielrealisierungen der DGPs](../output/cv_comparison/figures/01_dgp_example_realizations.png){width="90%"}
+# Gemeinsames Prognosemodell
 
-# Lag-Features und einheitliches Modell
+Für die Hauptstudie wird für alle DGPs und alle CV-Methoden dasselbe lineare Regressionsmodell verwendet. Die Prädiktoren sind ausschließlich `lag_1` bis `lag_5`. Es gibt keine automatische Modellauswahl, keine nichtlinearen Terme, keine spezielle Trendvariable, keine saisonalen Dummyvariablen und keinen `lag_12`. Das Modell wird deshalb nicht als optimales Prognosemodell für jeden DGP dargestellt.
 
-Teil A verwendet für alle DGPs und alle CV-Methoden dasselbe Prognosemodell: eine lineare Regression von `y` auf `lag_1` bis `lag_5`. Es gibt hier keine Modellselektion und keine Lambda-Optimierung. Der Vergleich soll die CV-Verfahren treffen, nicht verschiedene Modellklassen.
+Ein Lag ist ein vergangener Wert der Zeitreihe. Allgemein gilt `lag_1 = y_(t-1)`, `lag_2 = y_(t-2)` und `lag_k = y_(t-k)`. `lag_1` ist also der direkt vorherige Wert, `lag_2` der Wert zwei Zeitpunkte zuvor und `lag_5` der Wert fünf Zeitpunkte zuvor.
 
+Das Hauptmodell lautet:
+
+\[
+y_t
+=
+\beta_0
++
+\beta_1 y_{t-1}
++
+\beta_2 y_{t-2}
++
+\beta_3 y_{t-3}
++
+\beta_4 y_{t-4}
++
+\beta_5 y_{t-5}
++
+\varepsilon_t.
+\]
+
+Ein kleines Zahlenbeispiel macht die Lag-Idee anschaulicher. Für die Zeitreihe `10, 12, 11, 15, 14, 17` und die Prognose des letzten Wertes `17` gelten:
+
+```text
+Vergangenheit                         Ziel
+y_(t-5)  y_(t-4)  y_(t-3)  y_(t-2)  y_(t-1)  ->  y_t
+  10       12       11       15       14      ->   17
+```
+
+Damit ist `lag_1 = 14`, `lag_2 = 15`, `lag_3 = 11`, `lag_4 = 12` und `lag_5 = 10`. Das lineare Modell lernt aus den Trainingsdaten, wie stark diese vergangenen Werte mit dem aktuellen Wert zusammenhängen.
+
+Die methodische Begründung ist, dass der Modellteil konstant gehalten wird. Dadurch können Unterschiede möglichst auf die CV-Verfahren und nicht auf unterschiedliche Prognosemodelle zurückgeführt werden. Besonders bei der saisonalen Zeitreihe ist das eine wichtige Limitation: Die Periode beträgt zwölf, das Modell enthält aber nur `lag_1` bis `lag_5`. Es kann die saisonale Struktur deshalb nicht vollständig direkt abbilden. Diese Modellmissspezifikation betrifft jedoch alle vier CV-Verfahren gleichermaßen. Sie ist eine Einschränkung der Übertragbarkeit, aber kein technischer Fehler der Implementierung.
 ```{r}
 #| echo: true
 #| eval: false
 #| code-fold: true
-#| code-summary: "Code anzeigen: Originalzeilen zur Lag-Bildung und ModellSchätzung"
-# für jeden Lag wird eine eigene Spalte erzeugt.
+#| code-summary: "Code anzeigen: Originalzeilen zur Lag-Bildung und Modellschätzung"
+# Für jeden Lag wird eine eigene Spalte erzeugt.
 # lag_1 enthält y_{t-1}, lag_2 enthält y_{t-2} usw.
-für (lag in 1:max_lag) {
-  data[[paste0("lag_", lag)]] <- c(
-    rep(NA, lag),
-    y[1:(length(y) - lag)]
-  )
+for (lag in seq_len(max_lag)) {
+  data[[paste0("lag_", lag)]] <- c(rep(NA_real_, lag), y[seq_len(n - lag)])
 }
 
 # Nach der Lag-Bildung werden unvollständige Anfangszeilen entfernt.
-data <- na.omit(data)
+data <- data[(max_lag + 1):n, ]
 
 # Das finale Modell nutzt alle Lags von 1 bis primary_max_lag.
-required_lags <- paste0("lag_", seq_len(max_lag))
-fürmula <- as.fürmula(paste("y ~", paste(required_lags, collapse = " + ")))
-lm(fürmula, data = train_data)
+required_lags <- paste0("lag_", seq_len(config$primary_max_lag))
+formula <- as.formula(paste("y ~", paste(required_lags, collapse = " + ")))
+lm(formula, data = train_data)
 ```
 
-# unabhängiger zukünftiger Testzeitraum
+# Train-Test-Trennung
 
-Nach der Lag-Erstellung werden die Zeitpunkte 31 bis 184 als Training und 185 bis 250 als unabhängiger Testzeitraum verwendet. Jede CV-Methode arbeitet ausschließlich innerhalb des Trainingszeitraums. Der Test-MSE bleibt die Referenz für den späteren Prognosefehler.
+Nach der Lag-Erstellung werden die Zeitpunkte 31 bis 184 als Trainingsdaten verwendet. Das ergibt `n_train = 154`. Der unabhängige Testzeitraum umfasst die Zeitpunkte 185 bis 250 und hat damit `n_test = 66`. Der Testzeitraum liegt vollständig nach dem Training und geht nicht in die Cross-Validation ein.
+
+Der Testzeitraum dient als Annäherung an den zukünftigen Prognosefehler. Er ist keine perfekte Realität, weil auch er simuliert ist, aber er imitiert die Situation, dass ein Modell auf früheren Daten geschätzt und anschließend auf späteren Beobachtungen bewertet wird. Das Training beginnt bei Zeitpunkt 31, weil die zusätzliche Ridge-/Lasso-Fallstudie mit bis zu 30 Lags arbeitet. Dadurch bleibt die zeitliche Grundlogik zwischen Hauptstudie und Zusatzanalyse konsistent.
 
 ```{r}
 #| echo: true
@@ -179,7 +283,7 @@ test_data <- lag_data[
   lag_data$time >= config$test_start & lag_data$time <= config$test_end,
 ]
 
-# Der Testfehler ist die externe ReferenzGröße für die CV-Schätzung.
+# Der Testfehler ist die externe Referenzgröße für die CV-Schätzung.
 final_model <- fit_primary_model(train_data, config)
 test_predictions <- predict_model(final_model, test_data)
 test_mse <- mse(test_data$y, test_predictions)
@@ -189,9 +293,32 @@ test_mse <- mse(test_data$y, test_predictions)
 
 ![Schematische Split-Logik](../output/cv_comparison/figures/02_cv_split_schema.png){width="90%"}
 
+Alle vier Verfahren arbeiten ausschließlich innerhalb des Trainingszeitraums. Sie unterscheiden sich darin, wie Trainings- und Validierungsbereiche gebildet werden. Dadurch vergleichen wir nicht verschiedene Datenstände, sondern verschiedene Validierungslogiken.
+Die folgenden kleinen Schemata zeigen die Grundidee der vier CV-Verfahren. `T` steht für Training, `V` für Validierung und `-` für Beobachtungen, die wegen des Puffers nicht trainiert werden.
+
+```text
+Standard-k-fold:
+Zeit:       1  2  3  4  5  6  7  8
+Training:   T  V  T  T  V  T  V  T
+
+Blocked CV:
+Zeit:       1  2  3  4  5  6  7  8
+Training:   T  T  T  V  V  T  T  T
+
+h-block:
+Zeit:       1  2  3  4  5  6  7  8
+Training:   T  T  -  V  V  -  T  T
+                     Puffer
+
+Rolling-origin:
+Split 1:    T  T  T  | V
+Split 2:    T  T  T  T  | V
+Split 3:    T  T  T  T  T  | V
+```
+
 ## Standard-k-fold
 
-Standard-k-fold verteilt die Trainingsbeobachtungen zufällig auf fünf Folds. Die Zeitstruktur wird bewusst ignoriert. Die Methode dient als klassische Referenz, ist aber für Zeitreihen methodisch problematisch.
+Standard-k-fold teilt die Trainingsbeobachtungen zufällig in fünf Folds auf. In jedem Durchlauf wird ein Fold validiert, während die übrigen Folds trainieren. Der Vorteil ist, dass die Methode viele Validierungspunkte nutzt und als klassische Referenz leicht verständlich ist. Der zentrale Nachteil liegt in der Zeitreihenstruktur: Die zufällige Aufteilung ignoriert die Reihenfolge vollständig. Dadurch können spätere Zeitpunkte im Training liegen, obwohl frühere Zeitpunkte validiert werden.
 
 ```{r}
 #| echo: true
@@ -207,13 +334,12 @@ validation_index <- which(fold_id == fold)
 train_index <- which(fold_id != fold)
 
 # Diese Kennzeichnung macht später sichtbar: k-fold nutzt die Zeitrichtung nicht.
-validation_contiguous = FALSE,
-uses_future_training = TRUE,
+uses_future_training = TRUE
 ```
 
 ## Blocked CV
 
-Blocked CV verwendet zusammenhängende Validierungsblöcke. Dadurch bleibt der Validierungsblock zeitlich geordnet, aber das Training kann weiterhin Beobachtungen aus der Zukunft enthalten.
+Blocked CV bildet zusammenhängende Validierungsblöcke. Dadurch ist der Validierungsbereich innerhalb eines Splits zeitlich kompakter als bei zufälligem k-fold. Das ist für Zeitreihen plausibler, weil Validierungsdaten nicht komplett über den Trainingszeitraum verteilt werden. Trotzdem ist blocked CV nicht vollständig zeitlich sauber: Das Training besteht aus allen übrigen Blöcken. Wenn ein mittlerer Block validiert wird, können spätere Beobachtungen im Training liegen.
 
 ```{r}
 #| echo: true
@@ -226,13 +352,12 @@ validation_index <- folds[[fold]]
 train_index <- setdiff(seq_len(nrow(data)), validation_index)
 
 # Der Check dokumentiert, ob spätere Zeitpunkte im Training liegen.
-validation_contiguous = TRUE,
-uses_future_training = max(data$time[train_index]) > max(data$time[validation_index]),
+uses_future_training = max(data$time[train_index]) > max(data$time[validation_index])
 ```
 
 ## h-block CV
 
-h-block CV nutzt ebenfalls zusammenhängende Validierungsblöcke, entfernt aber zusätzlich `h = 5` Beobachtungen vor und nach dem Validierungsblock. Dadurch wird lokale zeitliche Nähe reduziert.
+h-block CV verwendet ebenfalls zusammenhängende Validierungsblöcke, entfernt aber zusätzlich einen Puffer um den Validierungsblock. In diesem Projekt ist `h = 5`. Damit werden direkte zeitliche Nachbarn aus dem Training entfernt. Das reduziert lokale Abhängigkeit zwischen Trainings- und Validierungsdaten. h-block ist aber nicht vollständig rolling-origin-artig, weil weiterhin spätere Beobachtungen außerhalb des Puffers im Training liegen können.
 
 ```{r}
 #| echo: true
@@ -243,19 +368,19 @@ h-block CV nutzt ebenfalls zusammenhängende Validierungsblöcke, entfernt aber 
 h <- config$h_block
 
 # Um den Validierungsblock wird ein Puffer entfernt.
-buffür_start <- max(1, min(validation_index) - h)
-buffür_end <- min(nrow(data), max(validation_index) + h)
-removed_index <- buffür_start:buffür_end
+buffer_start <- max(1, min(validation_index) - h)
+buffer_end <- min(nrow(data), max(validation_index) + h)
+removed_index <- buffer_start:buffer_end
 train_index <- setdiff(seq_len(nrow(data)), removed_index)
 
 # Die entfernten Zeiten werden gespeichert, damit der Puffer prüfbar bleibt.
-removed_time_min = min(buffür_times),
-removed_time_max = max(buffür_times)
+removed_time_min = min(data$time[removed_index])
+removed_time_max = max(data$time[removed_index])
 ```
 
 ## Rolling-origin CV
 
-Rolling-origin verwendet ein expandierendes Trainingsfenster. Jeder Validierungsblock liegt vollständig nach dem Trainingsfenster. Diese Methode ist zeitlich sauber, erzeugt in diesem Design aber weniger Validierungsvorhersagen.
+Rolling-origin CV verwendet ein expandierendes Trainingsfenster. Der Validierungsblock liegt immer nach dem bisherigen Trainingsfenster. Damit entspricht das Verfahren am stärksten einer realen Prognosesituation: Es wird nur mit Vergangenheitsdaten trainiert und anschließend auf späteren Zeitpunkten validiert. Der Nachteil ist, dass die Trainingsfenster kleiner oder unterschiedlich groß sind und in diesem Design weniger Validierungspunkte entstehen können. Dadurch kann die Schätzung variabler werden.
 
 ```{r}
 #| echo: true
@@ -264,7 +389,7 @@ Rolling-origin verwendet ein expandierendes Trainingsfenster. Jeder Validierungs
 #| code-summary: "Code anzeigen: Originalzeilen zu rolling-origin CV"
 # Das erste Trainingsfenster umfasst die Hälfte der Trainingsdaten.
 initial_train_size <- floor(0.5 * n)
-validation_size <- ceiling((n - initial_train_size) / k)
+train_end <- initial_train_size
 
 # Der Validierungsblock beginnt direkt nach dem aktuellen Trainingsende.
 validation_start <- train_end + 1
@@ -280,14 +405,37 @@ if (max(train_index) >= min(validation_index)) {
 
 # Bewertungskennzahlen
 
-Die zentrale Größe ist
+Die zentrale Bewertungsgröße ist der Schätzfehler:
 
-\[
-\text{estimation error} = \text{CV-MSE} - \text{Test-MSE}.
-\]
+$$
+\text{Schätzfehler}
+=
+\widehat{\mathrm{MSE}}_{\mathrm{CV}}
+-
+\mathrm{MSE}_{\mathrm{Test}}.
+$$
 
-Negative Werte bedeuten eine optimistische Schätzung, positive Werte eine pessimistische Schätzung. Ausgewertet werden Bias, Varianz, RMSE und MAE des Schätzfehlers, der Anteil optimistischer Schätzungen, die Standardabweichung des CV-MSE und die Laufzeit.
+Der CV-MSE ist der von der jeweiligen CV-Methode geschätzte Prognosefehler. Der Test-MSE ist der Fehler auf dem späteren unabhängigen Testzeitraum und dient als Referenz für den zukünftigen Prognosefehler.
 
+Ein negativer Schätzfehler bedeutet eine optimistische Unterschätzung: Der CV-MSE ist kleiner als der Test-MSE. Ein positiver Schätzfehler bedeutet eine pessimistische beziehungsweise konservative Überschätzung: Der CV-MSE ist größer als der Test-MSE. Ein Wert nahe null bedeutet, dass das Cross-Validation-Verfahren den zukünftigen Prognosefehler genau schätzt.
+
+```{r}
+knitr::kable(data.frame(
+  Beispiel = c("optimistisch", "pessimistisch"),
+  `CV-MSE` = c("1,0", "1,6"),
+  `Test-MSE` = c("1,4", "1,4"),
+  Schätzfehler = c("1,0 - 1,4 = -0,4", "1,6 - 1,4 = 0,2"),
+  Interpretation = c(
+    "CV unterschätzt den späteren Fehler um 0,4.",
+    "CV überschätzt den späteren Fehler um 0,2."
+  ),
+  check.names = FALSE
+), caption = "Zwei einfache Beispiele für den Schätzfehler.")
+```
+
+Bias ist der durchschnittliche Schätzfehler über die Monte-Carlo-Wiederholungen. Der absolute Bias betrachtet nur die Größe der mittleren Verzerrung. Die Varianz des Schätzfehlers beschreibt, wie stark die Schätzung zwischen Simulationen schwankt. RMSE und MAE der Fehlerschätzung fassen die Abweichung vom Testfehler zusammen, wobei RMSE größere Fehler stärker gewichtet. Zusätzlich wird der Anteil optimistischer Schätzungen betrachtet, also wie oft `cv_mse < test_mse` gilt. Die Laufzeit ist keine Genauigkeitskennzahl, aber für praktische Anwendungen trotzdem relevant.
+
+Bias allein reicht nicht aus. Eine Methode kann im Mittel fast unverzerrt sein, aber zwischen einzelnen simulierten Zeitreihen stark schwanken. Deshalb werden zusätzlich Varianz, RMSE und MAE betrachtet.
 ```{r}
 #| echo: true
 #| eval: false
@@ -311,12 +459,15 @@ summary_table <- aggregate(
   FUN = mean
 )
 summary_table$rmse_estimation_error <- sqrt(summary_table$mean_squared_estimation_error)
-summary_table$abs_bias <- abs(summary_table$bias)
 ```
 
-# Monte-Carlo-Lauf
+# Monte-Carlo-Design
 
-In jeder Wiederholung wird pro DGP eine neue Zeitreihe simuliert. Danach laufen alle vier CV-Methoden über dieselben Trainingsdaten. Die Ergebnisse, Splits und Validierungsvorhersagen werden getrennt gespeichert.
+Eine einzelne simulierte Zeitreihe reicht für diese Fragestellung nicht aus. Sie kann zufällig besonders leicht oder besonders schwer zu prognostizieren sein. Durch Monte-Carlo-Wiederholungen lässt sich prüfen, ob eine CV-Methode über viele neu simulierte Zeitreihen hinweg stabil arbeitet.
+
+Das finale Design umfasst 200 Wiederholungen pro DGP, fünf DGPs und vier CV-Methoden. Daraus entstehen `5 * 200 * 4 = 4.000` Ergebniszeilen. Innerhalb einer Simulation erhalten alle vier CV-Methoden dieselbe Zeitreihe und dasselbe Trainings-/Testdesign. Der Vergleich ist damit innerhalb einer simulierten Zeitreihe gepaart. Das Seed-System sorgt dafür, dass die Simulationen und die k-fold-Zuordnung reproduzierbar bleiben.
+
+Vor dem finalen Lauf wird ein Pilotlauf mit fünf Wiederholungen pro DGP ausgeführt. Der Pilotlauf prüft technisch, ob die Pipeline funktioniert. Danach wird der finale Lauf mit 200 Wiederholungen gestartet. Die Pilotdateien werden nicht als finale Ergebnisse behalten.
 
 ```{r}
 #| echo: true
@@ -324,9 +475,8 @@ In jeder Wiederholung wird pro DGP eine neue Zeitreihe simuliert. Danach laufen 
 #| code-fold: true
 #| code-summary: "Code anzeigen: Originalzeilen zur Monte-Carlo-Schleife"
 # Jede Kombination aus DGP und Wiederholung wird systematisch durchlaufen.
-für (dgp_name in config$dgp_names) {
-  für (simulation_id in seq_len(R)) {
-    message("CV-MC ", run_label, " | DGP: ", dgp_name, " | Simulation: ", simulation_id, "/", R)
+for (dgp_name in config$dgp_names) {
+  for (simulation_id in seq_len(R)) {
     one <- run_one_cv_simulation(simulation_id, dgp_name, config)
     all_results <- rbind(all_results, one$results)
     all_splits <- rbind(all_splits, one$splits)
@@ -340,57 +490,116 @@ write.csv(all_splits, file.path(raw_dir, "cv_split_definitions.csv"), row.names 
 write.csv(all_predictions, file.path(raw_dir, "cv_validation_predictions.csv"), row.names = FALSE)
 ```
 
-# Monte-Carlo-Ergebnisse
+# Ergebnisse der Hauptstudie
 
 ```{r}
-display_summary <- summary_table[, c("dgp", "cv_method", "bias", "rmse_estimation_error", "var_estimation_error", "optimistic_share", "mean_runtime_seconds")]
-display_summary[, 3:7] <- round(display_summary[, 3:7], 4)
-knitr::kable(display_summary, caption = "Zentrale Kennzahlen nach DGP und CV-Methode.")
+knitr::kable(ranking, caption = "Bestes Verfahren je DGP nach absolutem Bias, RMSE und Varianz des Schätzfehlers.")
 ```
-
-![Bias je Methode und DGP](../output/cv_comparison/figures/03_bias_by_method_and_dgp.png){width="92%"}
-
-![RMSE der FehlerSchätzung](../output/cv_comparison/figures/04_rmse_estimation_error.png){width="92%"}
-
-![Verteilung der Schätzfehler](../output/cv_comparison/figures/05_estimation_error_boxplots.png){width="92%"}
-
-# Vergleich nach Zeitreihenstruktur
 
 ```{r}
-knitr::kable(ranking, caption = "Beste Methode je DGP und Kriterium.")
+knitr::kable(summary_display, caption = "Kompakte Ergebnisübersicht. Markiert ist je DGP der kleinste absolute Bias, der kleinste RMSE und die kleinste Varianz.")
 ```
 
-Bei AR(1) hat rolling-origin den kleinsten absoluten Bias, während blocked CV den kleinsten RMSE und die kleinste Varianz des Schätzfehlers besitzt. Bei ARMA(1,1) liegt Standard-k-fold in diesem einfachen linearen Setting nach Bias, RMSE und Varianz vorn. Bei MA(1) ist blocked CV in allen drei Genauigkeitskriterien am stärksten. für die saisonale Zeitreihe zeigt sich dagegen: blocked CV liegt beim Bias vorn, h-block aber bei RMSE und Varianz. Bei Trenddaten reduziert rolling-origin den Bias am stärksten, h-block den RMSE.
+Die Tabelle zeigt, dass keine Methode in allen fünf DGPs und bei allen Kriterien überlegen ist. Die Interpretation muss deshalb je Zeitreihenstruktur erfolgen. Bias bewertet die durchschnittliche Verzerrung, Varianz die Stabilität zwischen den Simulationen und RMSE verbindet Verzerrung und Streuung in einer Kennzahl.
 
-![CV-MSE gegen Test-MSE](../output/cv_comparison/figures/06_cv_mse_vs_test_mse.png){width="92%"}
+## AR(1)
 
-![Heatmap der RMSE-FehlerSchätzung](../output/cv_comparison/figures/09_rmse_heatmap.png){width="80%"}
+Bei AR(1) hat rolling-origin mit einem absoluten Bias von `r get_metric("AR(1)", "rolling_origin", "abs_bias")` den geringsten Bias. Blocked CV liegt beim absoluten Bias mit `r get_metric("AR(1)", "blocked", "abs_bias")` nur etwas darüber. Beim RMSE ist blocked mit `r get_metric("AR(1)", "blocked", "rmse_estimation_error")` besser als rolling-origin mit `r get_metric("AR(1)", "rolling_origin", "rmse_estimation_error")`. Auch die Varianz ist bei blocked mit `r get_metric("AR(1)", "blocked", "var_estimation_error")` geringer als bei rolling-origin mit `r get_metric("AR(1)", "rolling_origin", "var_estimation_error")`. Praktisch heißt das: rolling-origin liegt im Mittel sehr nah am Testfehler, blocked schwankt aber weniger.
 
-# Rechenaufwand
+## MA(1)
 
-![Laufzeitvergleich](../output/cv_comparison/figures/08_runtime_comparison.png){width="92%"}
+Bei MA(1) ist blocked CV bei allen drei Hauptkriterien am besten. Der absolute Bias beträgt `r get_metric("MA(1)", "blocked", "abs_bias")`, der RMSE `r get_metric("MA(1)", "blocked", "rmse_estimation_error")` und die Varianz `r get_metric("MA(1)", "blocked", "var_estimation_error")`. h-block liegt mit einem RMSE von `r get_metric("MA(1)", "hblock", "rmse_estimation_error")` nahe daran, rolling-origin ist mit `r get_metric("MA(1)", "rolling_origin", "rmse_estimation_error")` deutlich höher. In diesem kurzfristig abhängigen stationären Prozess scheint die blockweise Validierung die Struktur gut genug zu erfassen und bleibt gleichzeitig stabil.
 
-Die mittleren Laufzeiten unterscheiden sich in diesem linearen Setup nur wenig. Rolling-origin ist oft schnell, weil es weniger Validierungsvorhersagen erzeugt. Dieser Vorteil ist methodisch nicht kostenlos: Die Schätzung basiert auf weniger Validierungspunkten.
+## ARMA(1,1)
 
-# Zentrale Interpretation
+Bei ARMA(1,1) ist Standard-k-fold bei absolutem Bias, RMSE und Varianz am besten. Der absolute Bias beträgt `r get_metric("ARMA(1,1)", "kfold", "abs_bias")`, der RMSE `r get_metric("ARMA(1,1)", "kfold", "rmse_estimation_error")` und die Varianz `r get_metric("ARMA(1,1)", "kfold", "var_estimation_error")`. Blocked CV liegt beim RMSE mit `r get_metric("ARMA(1,1)", "blocked", "rmse_estimation_error")` nahe daran, rolling-origin ist mit `r get_metric("ARMA(1,1)", "rolling_origin", "rmse_estimation_error")` schlechter. Das Ergebnis muss kritisch gelesen werden: k-fold ist zeitlich theoretisch problematisch, weil es mögliche Zukunftsinformation zulässt. In diesem speziellen stationären Szenario liegt seine Fehlerschätzung trotzdem besonders nahe am Testfehler. Daraus folgt keine allgemeine Empfehlung für k-fold bei Zeitreihen.
 
-Es gibt keine universell beste CV-Methode. Die Rangfolge hängt vom DGP und vom Kriterium ab. Standard-k-fold ist theoretisch bei Zeitreihen problematisch, kann aber in einfachen stationären linearen Szenarien nahe am Testfehler liegen. Blocked CV ist in mehreren DGPs stabil, erlaubt aber Zukunft im Training. h-block reduziert lokale Nähe und verbessert vor allem beim saisonalen DGP RMSE und Varianz gegenüber blocked. Rolling-origin ist zeitlich sauber und besonders plausibel bei Trenddaten, zeigt aber wegen weniger Validierungspunkte eine höhere Streuung.
+## Saisonalität
 
-# Zusätzliche ARMA-Fallstudie mit OLS, Ridge und Lasso
+Bei der saisonalen Zeitreihe gewinnt blocked CV beim absoluten Bias mit `r get_metric("Seasonal", "blocked", "abs_bias")`. h-block hat mit `r get_metric("Seasonal", "hblock", "rmse_estimation_error")` den kleinsten RMSE und mit `r get_metric("Seasonal", "hblock", "var_estimation_error")` die kleinste Varianz. Der Unterschied im RMSE zwischen h-block (`r get_metric("Seasonal", "hblock", "rmse_estimation_error")`) und blocked (`r get_metric("Seasonal", "blocked", "rmse_estimation_error")`) ist klein, aber h-block liegt vorn. Dieses Beispiel zeigt gut, warum Bias allein nicht reicht: Eine Methode kann im Mittel wenig verzerrt sein, während eine andere bei Streuung und Gesamtfehler besser abschneidet.
 
-Als Teil B wird untersucht, ob Regularisierung bei einem ARMA(1,1)-Prozess mit 30 korrelierten Lag-Prädiktoren die Prognose verbessert. Diese Analyse vergleicht naive baseline, OLS Lag 1, OLS Lag 30, Ridge Lag 30 und Lasso Lag 30.
+## Trend
+
+Bei Trenddaten hat rolling-origin mit `r get_metric("Trend", "rolling_origin", "abs_bias")` den kleinsten absoluten Bias. Das passt zur zeitlichen Richtung des Verfahrens. Trotzdem gewinnt rolling-origin nicht bei allen Kriterien. h-block erzielt mit `r get_metric("Trend", "hblock", "rmse_estimation_error")` den kleinsten RMSE, während rolling-origin bei `r get_metric("Trend", "rolling_origin", "rmse_estimation_error")` liegt. Die kleinste Varianz hat blocked mit `r get_metric("Trend", "blocked", "var_estimation_error")`. Das zeigt, dass zeitliche Sauberkeit theoretisch plausibel ist, aber in einem begrenzten Simulationsdesign nicht automatisch jede numerische Kennzahl dominiert.
+
+![Bias nach Methode und DGP](../output/cv_comparison/figures/03_bias_by_method_and_dgp.png){width="95%"}
+
+![RMSE der Fehlerschätzung](../output/cv_comparison/figures/04_rmse_estimation_error.png){width="90%"}
+
+![Verteilung der Schätzfehler](../output/cv_comparison/figures/05_estimation_error_boxplots.png){width="95%"}
+
+![CV-MSE gegen Test-MSE](../output/cv_comparison/figures/06_cv_mse_vs_test_mse.png){width="90%"}
+
+![Varianz der Schätzfehler](../output/cv_comparison/figures/07_variance_estimation_error.png){width="90%"}
+
+![Laufzeitvergleich](../output/cv_comparison/figures/08_runtime_comparison.png){width="90%"}
+
+Der Laufzeitvergleich ist vor allem praktisch zu interpretieren. Ein Verfahren kann methodisch attraktiv sein, aber in größeren Anwendungen teurer werden. In diesem Projekt ist die Rechenzeit nicht das Hauptkriterium, sie hilft aber, die Methoden realistisch einzuordnen.
+# Ridge-/Lasso-Fallstudie
+
+Während Teil A die Validierungsverfahren bei einem konstant gehaltenen Prognosemodell vergleicht, betrachtet Teil B ergänzend die Modellkomplexität. Dazu erhält ein ARMA(1,1)-Prozess bis zu 30 vergangene Werte als mögliche Prädiktoren. Dadurch entsteht eine Situation mit vielen untereinander korrelierten Variablen, in der Overfitting und instabile Koeffizientenschätzungen auftreten können. Ridge und Lasso sind dafür sinnvoll, weil sie die Modellkomplexität über Regularisierung begrenzen.
+
+Verglichen werden eine naive Baseline, OLS mit `lag_1`, OLS mit `lag_1` bis `lag_30`, Ridge mit 30 Lags und Lasso mit 30 Lags. Ridge entspricht `alpha = 0`, Lasso entspricht `alpha = 1`. Der Regularisierungsparameter `lambda` steuert, wie stark Koeffizienten bestraft werden. Je größer `lambda` ist, desto stärker wird das Modell regularisiert.
+
+Lasso benötigt nicht grundsätzlich viele Lags. Sein Nutzen wird aber besonders sichtbar, wenn viele mögliche Prädiktoren vorhanden sind. Bei 30 Lags stehen `y_(t-1), y_(t-2), ..., y_(t-30)` zur Verfügung. Ein unregularisiertes OLS-Modell muss dann viele Koeffizienten schätzen. Benachbarte Lags sind oft stark korreliert, was die Varianz der Koeffizientenschätzungen erhöhen und Prognosen instabiler machen kann.
+
+Die Lasso-Schätzung minimiert nicht nur die Summe quadrierter Fehler, sondern ergänzt eine Strafe für die absoluten Koeffizienten:
+
+$
+\sum_{i=1}^{n}(y_i-\hat y_i)^2
++
+\lambda\sum_{j=1}^{p}|\beta_j|.
+$
+
+Bei `lambda = 0` entspricht das Modell ungefähr OLS. Bei größerem `lambda` werden Koeffizienten stärker geschrumpft. Einige Lasso-Koeffizienten können exakt null werden; dadurch führt Lasso eine Variablenauswahl durch.
+
+Die Auswahl von `lambda` erfolgt mit einer rolling-origin-Validierung auf dem Trainingszeitraum. Der Testzeitraum wird dafür nicht verwendet. `glmnet` standardisiert die Prädiktoren, damit die Regularisierung nicht von unterschiedlichen Skalen der Variablen abhängt.
 
 ```{r}
-case_display <- case_metrics[, c("model", "cv_mse", "test_rmse", "test_mae")]
-case_display[, 2:4] <- round(case_display[, 2:4], 4)
-knitr::kable(case_display, caption = "Sekundäre ARMA(1,1)-Fallstudie.")
+knitr::kable(case_metrics, caption = "Sekundäre ARMA(1,1)-Fallstudie.")
 ```
 
-Diese Fallstudie beantwortet eine andere, engere Unterfrage. Sie wird nicht mit den Monte-Carlo-Ergebnissen vermischt.
+In dieser konkreten ARMA(1,1)-Fallstudie erzielte Lasso den kleinsten Testfehler. Lasso hatte sieben aktive Lags. Das bedeutet, dass von 30 möglichen Lag-Prädiktoren nur sieben mit einem von null verschiedenen Koeffizienten im finalen Modell verblieben: `r paste(lasso_active_lags$term, collapse = ", ")`. Das bedeutet nicht automatisch, dass genau diese sieben Lags allgemein relevant sind. Es gilt nur für diese simulierte Fallstudie und das gewählte `lambda`.
+```{r}
+#| echo: true
+#| eval: false
+#| code-fold: true
+#| code-summary: "Code anzeigen: Originalzeilen zu Ridge und Lasso"
+# Ridge: alpha = 0, lambda wird über rolling-origin im Trainingszeitraum gewählt.
+ridge_cv <- rolling_origin_glmnet_cv(x_train, y_train, train_data$time, split_table, alpha = 0)
+ridge_model <- glmnet(
+  x_train, y_train,
+  alpha = 0,
+  standardize = TRUE,
+  lambda = ridge_cv$lambda_min
+)
+
+# Lasso: alpha = 1, kann einzelne Lag-Koeffizienten auf null setzen.
+lasso_cv <- rolling_origin_glmnet_cv(x_train, y_train, train_data$time, split_table, alpha = 1)
+lasso_model <- glmnet(
+  x_train, y_train,
+  alpha = 1,
+  standardize = TRUE,
+  lambda = lasso_cv$lambda_min
+)
+
+# Die Testvorhersagen werden erst nach der Lambda-Auswahl berechnet.
+lasso_predictions <- as.numeric(predict(lasso_model, newx = x_test, s = lasso_cv$lambda_min))
+```
+
+# Verwendete Pakete
+
+Die Hauptstudie nutzt viel Base R und Funktionen aus `stats`: `rnorm()` für Zufallsfehler, `lm()` für das lineare Lag-Modell, `predict()` für Prognosen sowie `mean()`, `var()` und `aggregate()` für Kennzahlen. Das Paket `here` sorgt für relative Projektpfade, damit keine absoluten Benutzerpfade im Code stehen. `ggplot2` wird für die finalen Grafiken verwendet, zum Beispiel für Facetten, Boxplots, Balkendiagramme und Scatterplots.
+
+`glmnet` wird ausschließlich in der zusätzlichen Ridge-/Lasso-Fallstudie verwendet. Dort sind `alpha` und `lambda` zentral: `alpha = 0` steht für Ridge, `alpha = 1` für Lasso. `knitr` dient der Darstellung von Tabellen im Bericht, aber nicht der Modellschätzung. Quarto verbindet Text, Code, Tabellen und Grafiken und erzeugt Bericht und Präsentation. `Matrix` ist eine technische Abhängigkeit von `glmnet` und keine eigenständige methodische Entscheidung in diesem Projekt.
 
 # Reproduzierbarkeit und Checks
 
-Die automatischen Checks prüfen unter anderem, ob alle erwarteten Ergebniszeilen vorhanden sind, ob alle DGPs und CV-Methoden vorkommen, ob keine Testdaten in der CV liegen und ob rolling-origin wirklich keine zukünftigen Trainingswerte verwendet.
+Die Reproduzierbarkeit beruht auf festen Seeds, relativen Pfaden und gespeicherten Ergebnisdateien. Zusätzlich erzeugt die Pipeline Validierungschecks. Sie prüfen unter anderem, ob alle erwarteten Ergebniszeilen vorhanden sind, ob alle fünf DGPs und alle vier CV-Methoden vorkommen, ob keine Testdaten in die CV eingehen und ob rolling-origin tatsächlich nur frühere Trainingszeitpunkte verwendet.
+
+```{r}
+knitr::kable(checks, caption = "Automatische Validierungschecks der Hauptstudie.")
+```
 
 ```{r}
 #| echo: true
@@ -401,20 +610,14 @@ Die automatischen Checks prüfen unter anderem, ob alle erwarteten Ergebniszeile
 checks <- add_check(checks, "no_test_data_in_cv", max(splits$validation_time_max, na.rm = TRUE) < config$test_start, paste("max_cv_time=", max(splits$validation_time_max, na.rm = TRUE)))
 
 # Rolling-origin muss strikt Vergangenheit vor Zukunft einhalten.
-rolling <- splits[splits$cv_method == "rolling_origin", ]
 checks <- add_check(checks, "rolling_origin_uses_no_future_training", all(!rolling$uses_future_training & rolling$train_time_max < rolling$validation_time_min), "train max < validation min")
 
 # Beim h-block wird geprüft, ob der konfigurierte Puffer wirklich entfernt wurde.
-hblock <- splits[splits$cv_method == "hblock", ]
-expected_removed_min <- pmax(config$train_start, hblock$validation_time_min - config$h_block)
-expected_removed_max <- pmin(config$train_end, hblock$validation_time_max + config$h_block)
-checks <- add_check(checks, "hblock_removes_configured_buffür", all(hblock$h == config$h_block & hblock$removed_time_min == expected_removed_min & hblock$removed_time_max == expected_removed_max), paste("h=", config$h_block))
-```
+checks <- add_check(checks, "hblock_buffer_matches_config", all(hblock$removed_time_min == expected_removed_min & hblock$removed_time_max == expected_removed_max), "removed range equals validation +/- h")
 
-Alle finalen Checks sind bestanden:
-
-```{r}
-knitr::kable(checks, caption = "Automatische Validierungschecks.")
+# Der gespeicherte CV-MSE muss dem gepoolten MSE der Validierungsvorhersagen entsprechen.
+pooled <- aggregate(squared_error ~ simulation_id + dgp + cv_method, data = predictions, FUN = mean)
+checks <- add_check(checks, "pooled_mse_matches_saved_cv_mse", all(abs(compare$cv_mse - compare$pooled_cv_mse_from_predictions) < 1e-10), paste("checked rows=", nrow(compare)))
 ```
 
 Der vollständige Lauf ist:
@@ -423,8 +626,26 @@ Der vollständige Lauf ist:
 Rscript syntax/99_run_all.R
 ```
 
-Die wichtigsten Outputs liegen unter `output/cv_comparison/`.
+Die wichtigsten Outputs liegen unter `output/cv_comparison/`, `output/final_comparison/` und `output/lasso/`.
 
 # Limitationen
 
-Die Studie nutzt einfache lineare Lag-Modelle und simulierte DGPs. Die Ergebnisse zeigen methodische Unterschiede in einem kontrollierten Setting, aber sie sind keine Garantie für reale, nichtlineare oder strukturell brechende Zeitreihen. Außerdem verwendet rolling-origin weniger Validierungsvorhersagen als die anderen Methoden; das ist methodisch transparent, beeinflusst aber Streuung und Laufzeitvergleich.
+Die Ergebnisse sind nicht universell verallgemeinerbar. Erstens werden nur fünf DGPs betrachtet. Sie decken stationäre lineare Abhängigkeit, Trend und Saisonalität ab, aber keine strukturellen Brüche, keine nichtlinearen Prozesse, keine wechselnde Varianz und keine realen Zeitreihendaten. Zweitens ist die Länge mit `T = 250` fest vorgegeben. Bei deutlich kürzeren oder längeren Zeitreihen könnten sich CV-Verfahren anders verhalten.
+
+Drittens wird in der Hauptstudie ein festes lineares Modell mit fünf Lags verwendet. Es gibt keine automatische Modellauswahl, keine Trendvariable, keine saisonalen Dummyvariablen und keinen `lag_12`. Besonders für die saisonale Zeitreihe ist das eine klare Modellmissspezifikation. Sie betrifft alle vier CV-Methoden gleich, begrenzt aber die Übertragbarkeit auf optimal spezifizierte saisonale Modelle.
+
+Viertens wird für h-block nur ein Wert `h = 5` untersucht. Andere Puffergrößen könnten andere Bias-Varianz-Eigenschaften erzeugen. Schließlich ist Teil B nur eine zusätzliche ARMA(1,1)-Fallstudie. Die Lasso-Ergebnisse zeigen, was in dieser konkreten simulierten Situation passiert, aber sie sind keine allgemeine Aussage über Lasso in allen Zeitreihenproblemen.
+
+# Fazit
+
+Die Forschungsfrage lässt sich klar beantworten: Keine der vier CV-Methoden ist in allen fünf DGPs und bei allen Kriterien überlegen. Die Rangfolge hängt davon ab, ob man die durchschnittliche Verzerrung, die Stabilität oder den kombinierten Fehler betrachtet. Bias bewertet die mittlere Verzerrung der Fehlerschätzung, Varianz bewertet die Stabilität zwischen Simulationen, und RMSE verbindet Verzerrung und Streuung. Deshalb kann eine Methode bei einem Kriterium gewinnen und bei einem anderen verlieren.
+
+Bei AR(1) hatte rolling-origin den geringsten absoluten Bias (`r get_metric("AR(1)", "rolling_origin", "abs_bias")`), während blocked den geringsten RMSE (`r get_metric("AR(1)", "blocked", "rmse_estimation_error")`) und die geringste Varianz (`r get_metric("AR(1)", "blocked", "var_estimation_error")`) erreichte. Bei MA(1) war blocked in allen drei Kriterien am besten: absoluter Bias `r get_metric("MA(1)", "blocked", "abs_bias")`, RMSE `r get_metric("MA(1)", "blocked", "rmse_estimation_error")` und Varianz `r get_metric("MA(1)", "blocked", "var_estimation_error")`.
+
+Bei ARMA(1,1) lag k-fold bei Bias, RMSE und Varianz vorn. Der RMSE betrug bei k-fold `r get_metric("ARMA(1,1)", "kfold", "rmse_estimation_error")`, bei rolling-origin dagegen `r get_metric("ARMA(1,1)", "rolling_origin", "rmse_estimation_error")`. Das ist ein gutes Beispiel dafür, dass ein zeitlich problematisches Verfahren in einem stationären Simulationsszenario numerisch gut abschneiden kann. Es bedeutet aber nicht, dass k-fold für Zeitreihen methodisch unproblematisch ist.
+
+Bei Saisonalität hatte blocked den geringsten absoluten Bias (`r get_metric("Seasonal", "blocked", "abs_bias")`), während h-block den geringsten RMSE (`r get_metric("Seasonal", "hblock", "rmse_estimation_error")`) und die geringste Varianz (`r get_metric("Seasonal", "hblock", "var_estimation_error")`) erreichte. Bei Trenddaten war rolling-origin beim absoluten Bias am besten (`r get_metric("Trend", "rolling_origin", "abs_bias")`), h-block beim RMSE (`r get_metric("Trend", "hblock", "rmse_estimation_error")`) und blocked bei der Varianz (`r get_metric("Trend", "blocked", "var_estimation_error")`).
+
+Die kritische Interpretation ist daher zweigeteilt. Zeitlich saubere Verfahren wie rolling-origin sind theoretisch plausibel, weil sie die reale Prognoserichtung einhalten. Numerisch müssen sie in einem begrenzten Simulationsdesign aber nicht bei jeder Kennzahl gewinnen. Umgekehrt kann k-fold in stationären Szenarien gute Werte liefern, bleibt aber wegen möglicher Zukunftsinformation methodisch problematisch.
+
+Für die Praxis sollte eine CV-Methode deshalb nicht allein nach einem allgemeinen Standard gewählt werden. Die zeitliche Struktur der Daten, der Prognosehorizont, mögliche Nichtstationarität und das Ziel der Fehlerschätzung müssen berücksichtigt werden. Wenn die spätere Anwendung streng zukunftsgerichtet ist, spricht viel für rolling-origin oder verwandte Verfahren. Wenn Stabilität der Fehlerschätzung im Vordergrund steht, können blocked oder h-block je nach Struktur günstiger sein. Die Ergebnisse dieses Projekts liefern dafür Hinweise, aber keine allgemeingültige Regel.

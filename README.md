@@ -3,53 +3,48 @@
 
 # Machine-Learning2026
 
-Dieses Projekt untersucht, wie gut verschiedene
-Cross-Validation-Verfahren den zukünftigen Prognosefehler bei Zeitreihen
-schätzen.
+Dieses Projekt untersucht Cross-Validation bei Zeitreihen. Im
+Mittelpunkt steht nicht die Entwicklung eines neuen Prognosemodells,
+sondern die Frage, wie gut verschiedene Validierungsverfahren den
+späteren Prognosefehler schätzen.
 
 ## Forschungsfrage
 
-Wie unterscheiden sich Standard-k-fold-CV, blocked CV, h-block CV und
-rolling-origin CV bei AR(1), MA(1), ARMA(1,1), Trend und Seasonal
-hinsichtlich Bias, Streuung und Nähe zum unabhängigen Testfehler?
+> Wie unterscheiden sich Standard-k-fold-Cross-Validation, blocked
+> Cross-Validation, h-block Cross-Validation und rolling-origin
+> Cross-Validation bei AR-, MA-, ARMA-, Trend- und saisonalen Zeitreihen
+> hinsichtlich der Schätzung des zukünftigen Prognosefehlers?
 
 ## Studiendesign
 
-- fünf simulierte Zeitreihenstrukturen
-- lineares Lag-Modell mit `lag_1` bis `lag_5`
-- Training: Zeitpunkte 31 bis 184
-- Test: Zeitpunkte 185 bis 250
-- 200 Monte-Carlo-Wiederholungen je DGP
-- zusätzlicher ARMA(1,1)-Vergleich mit OLS, Ridge und Lasso
+- fünf simulierte Zeitreihenstrukturen: AR(1), MA(1), ARMA(1,1), Trend
+  und saisonale Zeitreihe
+- vier CV-Verfahren: Standard-k-fold, blocked, h-block und
+  rolling-origin
+- gemeinsames lineares Lag-Modell mit `lag_1` bis `lag_5`
+- unabhängiger Testzeitraum nach dem Training
+- 200 Monte-Carlo-Wiederholungen pro DGP
+- zusätzliche ARMA(1,1)-Fallstudie mit OLS, Ridge und Lasso
 
 ## Wichtigste Ergebnisse
 
-| dgp | best_abs_bias | best_rmse_estimation_error | best_variance | fastest_method |
-|:---|:---|:---|:---|:---|
-| AR(1) | rolling_origin | blocked | blocked | blocked |
-| ARMA(1,1) | kfold | kfold | kfold | rolling_origin |
-| MA(1) | blocked | blocked | blocked | kfold |
-| Seasonal | blocked | hblock | hblock | rolling_origin |
-| Trend | rolling_origin | hblock | blocked | rolling_origin |
-
-Beste Methode je DGP und Kriterium.
-
-Alle Validierungschecks sind bestanden: TRUE.
-
-Kurz gesagt: Es gibt keine universell beste Methode. Rolling-origin ist
-zeitlich sauber, blocked CV ist oft stabil, h-block hilft besonders beim
-saisonalen Prozess, und Standard-k-fold kann in einfachen stationären
-Szenarien überraschend nah am Testfehler liegen.
+Es gibt keine universell beste Methode. Rolling-origin ist zeitlich am
+saubersten und beim Trend-Bias stark. Blocked CV ist in mehreren
+Szenarien stabil, ist aber nicht vollständig zukunftsfrei. h-block
+reduziert lokale Nähe und hilft besonders beim saisonalen DGP.
+Standard-k-fold kann in einzelnen einfachen Szenarien numerisch gut
+abschneiden, bleibt für Zeitreihen aber methodisch kritisch.
 
 ## Projektstruktur
 
 ``` text
 Machine-Learning2026/
-|-- syntax/        # R-Skripte, Bericht und Styles
-|-- output/        # finale Tabellen, Grafiken und Laufprotokolle
-|-- presentation/  # Präsentationsquelle und gerenderte Präsentation
 |-- README.qmd
-`-- README.md
+|-- README.md
+|-- syntax/        # R-Skripte, Bericht und Stil
+|-- output/        # finale Tabellen, Grafiken, Modelle und Logs
+|-- presentation/  # Präsentationsquelle, HTML und Sprechplan
+|-- information/   # Vorbereitung auf mögliche Prüfungsfragen
 ```
 
 ## Reproduzierbarkeit
@@ -65,3 +60,4 @@ quarto render presentation/presentation.qmd
 
 - Bericht: `syntax/project_report.html`
 - Präsentation: `presentation/presentation.html`
+- mögliche Prüfungsfragen: `information/exam_questions.md`

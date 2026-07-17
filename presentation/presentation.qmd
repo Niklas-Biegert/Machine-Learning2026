@@ -1,7 +1,7 @@
 ---
 title: "Cross-Validation für Zeitreihenprognosen"
 subtitle: "Standard-k-fold, blocked, h-block und rolling-origin im Simulationsvergleich"
-author: "Niklas Biegert"
+author: "Alex, Nils und Niklas"
 date: "12. August 2026"
 format:
   revealjs:
@@ -27,114 +27,152 @@ if (dir.exists(".r-lib")) {
 }
 summary_table <- read.csv("../output/cv_comparison/tables/cv_method_summary.csv")
 ranking <- read.csv("../output/cv_comparison/tables/cv_method_ranking.csv")
-checks <- read.csv("../output/cv_comparison/tables/cv_validation_checks.csv")
 case_metrics <- read.csv("../output/final_comparison/model_comparison_metrics.csv")
 ```
 
 ## Motivation
 
-Zeitreihenprognosen haben eine Richtung.
+Zeitreihen sind geordnet.
 
-**Vergangenheit** darf ins Training.  
-**Zukunft** darf erst im Test sichtbar werden.
+Zufällige Cross-Validation kann diese Ordnung verletzen.
 
-Viele klassische Cross-Validation-Verfahren verletzen diese Logik teilweise oder vollständig.
+<p class="accent">Die zentrale Frage ist, wie gut CV den zukünftigen Prognosefehler schätzt.</p>
 
-## Zentrale Forschungsfrage
+## Forschungsfrage
 
-> Wie unterscheiden sich Standard-k-fold-CV, blocked CV, h-block CV und rolling-origin CV bei AR-, MA-, ARMA-, Trend- und saisonalen Zeitreihen hinsichtlich der Schätzung des zukünftigen Prognosefehlers?
+> Wie unterscheiden sich Standard-k-fold-Cross-Validation, blocked Cross-Validation, h-block Cross-Validation und rolling-origin Cross-Validation bei AR-, MA-, ARMA-, Trend- und saisonalen Zeitreihen hinsichtlich der Schätzung des zukünftigen Prognosefehlers?
 
 ## Fünf Zeitreihenstrukturen
 
-![Beispielrealisierungen](../output/cv_comparison/figures/01_dgp_example_realizations.png){width="86%"}
+| DGP | Parameter | Struktur |
+|---|---:|---|
+| AR(1) | phi = 0,7 | direkter Vorwert |
+| MA(1) | theta = 0,6 | kurzfristiger Schock |
+| ARMA(1,1) | phi = 0,6; theta = 0,5 | Wert und Schock |
+| Trend | beta1 = 0,03 | nichtstationäre Entwicklung |
+| Seasonal | Periode 12 | regelmäßige Saison |
 
-## Warum gewöhnliche CV schwierig ist
+## Gemeinsames Modell
 
-- Standard-k-fold mischt Zeitpunkte zufällig.
-- Blocked CV validiert zusammenhängende Blöcke, kann aber Zukunft im Training nutzen.
-- h-block entfernt einen Puffer um den Validierungsblock.
-- Rolling-origin trainiert nur auf der Vergangenheit.
+Für alle DGPs und CV-Verfahren wird dasselbe Modell genutzt:
 
-<p class="accent">Die Frage ist empirisch: Welche Methode schätzt den späteren Testfehler am besten?</p>
+\[
+y_t \sim lag_1 + lag_2 + lag_3 + lag_4 + lag_5
+\]
 
-## Vier verglichene CV-Verfahren
+Das Modell ist nicht für jeden DGP optimal. Es hält aber den Modellteil konstant, damit der Unterschied stärker auf die CV-Methode zurückgeführt werden kann.
 
-![Split-Schema](../output/cv_comparison/figures/02_cv_split_schema.png){width="88%"}
+## Train-Test-Design
+
+| Teil | Zeitpunkte | Umfang |
+|---|---:|---:|
+| Training | 31 bis 184 | 154 |
+| Test | 185 bis 250 | 66 |
+
+Der Testzeitraum liegt vollständig nach dem Training und wird nicht für die CV verwendet.
+
+## Vier CV-Verfahren
+
+| Verfahren | Idee | Problem |
+|---|---|---|
+| k-fold | zufällige Folds | Zeitrichtung ignoriert |
+| blocked | zusammenhängende Blöcke | spätere Trainingswerte möglich |
+| h-block | Block plus Puffer `h = 5` | nicht vollständig zeitgerichtet |
+| rolling-origin | expandierendes Trainingsfenster | weniger/variablere Validierung |
 
 ## Monte-Carlo-Design
 
 | Element | Wert |
 |---|---:|
-| Zeitreihenlänge | 250 |
-| Training | 31--184 |
-| Test | 185--250 |
-| Modell | LM mit `lag_1` bis `lag_5` |
-| Wiederholungen | 200 je DGP |
-| ZielGröße | CV-MSE - Test-MSE |
+| DGPs | 5 |
+| Wiederholungen je DGP | 200 |
+| CV-Methoden | 4 |
+| Ergebniszeilen | 4.000 |
+| Pilotlauf | 5 Wiederholungen je DGP |
 
-Das Prognosemodell ist für alle CV-Methoden identisch.
+Alle CV-Methoden erhalten innerhalb einer Simulation dieselbe Zeitreihe.
+
+## Bewertungslogik
+
+\[
+\text{estimation error} = \text{CV-MSE} - \text{Test-MSE}
+\]
+
+- negativ: optimistische Schätzung
+- positiv: pessimistische Schätzung
+- nahe null: CV-MSE liegt nah am Test-MSE
+
+Bias allein reicht nicht aus; RMSE und Varianz zeigen zusätzlich die Stabilität.
 
 ## Bias-Ergebnisse
 
 ![Bias nach Methode und DGP](../output/cv_comparison/figures/03_bias_by_method_and_dgp.png){width="88%"}
 
-<p class="small">Negative Werte sind optimistisch, positive Werte pessimistisch.</p>
+## RMSE der Fehlerschätzung
 
-## RMSE der FehlerSchätzung
+![RMSE der Fehlerschätzung](../output/cv_comparison/figures/04_rmse_estimation_error.png){width="88%"}
 
-![RMSE der FehlerSchätzung](../output/cv_comparison/figures/04_rmse_estimation_error.png){width="88%"}
+## Varianz der Schätzfehler
 
-## Streuung der Schätzfehler
+![Varianz der Schätzfehler](../output/cv_comparison/figures/07_variance_estimation_error.png){width="88%"}
 
-![Boxplots der Schätzfehler](../output/cv_comparison/figures/05_estimation_error_boxplots.png){width="88%"}
-
-## Unterschiede zwischen den DGPs
-
-![Heatmap](../output/cv_comparison/figures/09_rmse_heatmap.png){width="72%"}
-
-Die Rangfolge ist nicht stabil über alle Zeitreihenstrukturen.
-
-## Laufzeit und praktische Abwägung
-
-![Laufzeitvergleich](../output/cv_comparison/figures/08_runtime_comparison.png){width="88%"}
-
-Rolling-origin ist oft schnell, nutzt hier aber nur 77 Validierungsvorhersagen. Die anderen drei Methoden nutzen 154.
-
-## Zentrales Fazit zum CV-Vergleich
+## Ergebnisrangfolge
 
 ```{r}
 knitr::kable(ranking)
 ```
 
-Es gibt keinen universellen Gewinner. Rolling-origin ist zeitlich sauber und bei Trenddaten stark im Bias. Blocked CV ist oft stabil, aber methodisch nicht zukunftsfrei. h-block hilft besonders bei Seasonal. Standard-k-fold ist theoretisch problematisch, kann in einfachen stationären Szenarien aber konkurrenzfähig sein.
+## Interpretation
 
-## Zusaetzliche ARMA-Fallstudie
+- AR(1): rolling-origin beim Bias stark, blocked bei RMSE und Varianz.
+- ARMA(1,1): k-fold liegt numerisch vorn, bleibt aber zeitlich kritisch.
+- MA(1): blocked schneidet in den drei Genauigkeitskriterien am besten ab.
+- Seasonal: blocked beim Bias, h-block bei RMSE und Varianz.
+- Trend: rolling-origin beim Bias, h-block beim RMSE.
 
-Teil B bleibt als Vertiefung erhalten:
-
-- naive baseline
-- OLS Lag 1
-- OLS Lag 30
-- Ridge Lag 30
-- Lasso Lag 30
+## Zusätzliche ARMA-Fallstudie
 
 ```{r}
 case_display <- case_metrics[, c("model", "test_rmse", "test_mae")]
-case_display[, 2:3] <- round(case_display[, 2:3], 4)
 knitr::kable(case_display)
 ```
 
+Lasso erzielt in dieser konkreten Fallstudie den kleinsten Testfehler. Das ist kein allgemeiner Beweis, dass Lasso immer überlegen ist.
+
 ## Limitationen
 
-- Simulierte DGPs, keine realen Strukturbrüche.
-- Einheitliches lineares Lag-Modell.
-- Rolling-origin hat weniger Validierungspunkte.
-- Ergebnisse sind methodisch informativ, aber keine Garantie für jede reale Zeitreihe.
+- simulierte, einfache DGPs
+- lineares Modell mit `lag_1` bis `lag_5`
+- saisonale Periode 12, aber kein `lag_12` im Hauptmodell
+- rolling-origin nutzt weniger Validierungspunkte
+- Ridge/Lasso nur als Zusatzfallstudie
 
-## Schlussfolgerung
+## Fazit
 
-<p class="closing-statement">Cross-Validation für Zeitreihen ist keine reine Technikfrage. Die beste Wahl hängt davon ab, ob Zeitrichtung, Bias, Streuung oder Rechenaufwand im konkreten Prognoseproblem wichtiger sind.</p>
+Es gibt keine universell beste CV-Methode für Zeitreihen.
 
-<p class="muted">Alle Validierungschecks bestanden: `r all(checks$passed)`</p>
+<p class="closing-statement">Die passende Methode hängt davon ab, ob Zeitrichtung, Bias, Streuung oder praktische Rechenzeit im konkreten Prognoseproblem wichtiger sind.</p>
 
+<!--
+Sprechplan für die Gruppenpräsentation:
 
+Niklas:
+- Motivation
+- Forschungsfrage
+- gemeinsames Modell
+- Train-Test-Design
+
+Alex:
+- fünf DGPs
+- vier CV-Verfahren
+- Monte-Carlo-Design
+- Bewertungslogik
+
+Nils:
+- zentrale Ergebnisse
+- Ridge-/Lasso-Fallstudie
+- Limitationen
+- Fazit
+
+Die Aufteilung ist so gedacht, dass jede Person mehrere inhaltliche Folien übernimmt und keine einzelne Person als Hauptsprecher auftritt.
+-->
